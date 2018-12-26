@@ -19,6 +19,7 @@
 #include "IPopupMenuControl.h"
 
 #include <wininet.h>
+#include <mmsystem.h>
 
 #pragma warning(disable:4244) // Pointer size cast mismatch.
 #pragma warning(disable:4312) // Pointer size cast mismatch.
@@ -100,6 +101,93 @@ inline IMouseInfo IGraphicsWin::GetMouseInfoDeltas(float& dX, float& dY, LPARAM 
 }
 
 // static
+void CALLBACK IGraphicsWin::TimerCallback(UINT uTimerID, UINT uMsg, DWORD_PTR param, DWORD_PTR dw1, DWORD_PTR dw2)
+{
+  HWND hWnd = (HWND)param;
+  IGraphicsWin* pGraphics = (IGraphicsWin*)GetWindowLongPtr(hWnd, GWLP_USERDATA);
+
+  if (!pGraphics)
+    return;
+
+  if (pGraphics->mParamEditWnd && pGraphics->mParamEditMsg != kNone)
+  {
+    char txt[MAX_WIN32_PARAM_LEN];
+    double v;
+
+    switch (pGraphics->mParamEditMsg)
+    {
+      case kCommit:
+      {
+        SendMessage(pGraphics->mParamEditWnd, WM_GETTEXT, MAX_WIN32_PARAM_LEN, (LPARAM)txt);
+
+        const IParam* pParam = pGraphics->mEdControl->GetParam();
+
+        if (pParam)
+        {
+          if (pParam->Type() == IParam::kTypeEnum || pParam->Type() == IParam::kTypeBool)
+          {
+            double vi = 0.;
+            pParam->MapDisplayText(txt, &vi);
+            v = (double)vi;
+          }
+          else
+          {
+            v = atof(txt);
+            if (pParam->GetNegateDisplay())
+            {
+              v = -v;
+            }
+          }
+          pGraphics->mEdControl->SetValueFromUserInput(pParam->ToNormalized(v));
+        }
+        else
+        {
+          pGraphics->mEdControl->OnTextEntryCompletion(txt);
+        }
+        // Fall through.
+      }
+      case kCancel:
+      {
+        SetWindowLongPtr(pGraphics->mParamEditWnd, GWLP_WNDPROC, (LPARAM)pGraphics->mDefEditProc);
+        DestroyWindow(pGraphics->mParamEditWnd);
+        pGraphics->mParamEditWnd = nullptr;
+        pGraphics->mEdControl = nullptr;
+        pGraphics->mDefEditProc = nullptr;
+        break;
+      }
+    }
+
+    pGraphics->mParamEditMsg = kNone;
+  }
+
+  IRECTList rects;
+
+  if (pGraphics->IsDirty(rects))
+  {
+    pGraphics->SetAllControlsClean();
+    IRECT dirtyR = rects.Bounds();
+    dirtyR.ScaleBounds(pGraphics->GetDrawScale());
+    RECT r = { (LONG)dirtyR.L, (LONG)dirtyR.T, (LONG)dirtyR.R, (LONG)dirtyR.B };
+
+    InvalidateRect(hWnd, &r, FALSE);
+
+    if (pGraphics->mParamEditWnd)
+    {
+      IRECT notDirtyR = pGraphics->mEdControl->GetRECT();
+      notDirtyR.ScaleBounds(pGraphics->GetDrawScale());
+      RECT r2 = { (LONG)notDirtyR.L, (LONG)notDirtyR.T, (LONG)notDirtyR.R, (LONG)notDirtyR.B };
+      ValidateRect(hWnd, &r2); // make sure we dont redraw the edit box area
+      UpdateWindow(hWnd);
+      pGraphics->mParamEditMsg = kUpdate;
+    }
+    else
+    {
+      UpdateWindow(hWnd);
+    }
+  }
+}
+
+// static
 LRESULT CALLBACK IGraphicsWin::WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
   if (msg == WM_CREATE)
@@ -107,20 +195,20 @@ LRESULT CALLBACK IGraphicsWin::WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARA
     LPCREATESTRUCT lpcs = (LPCREATESTRUCT) lParam;
     SetWindowLongPtr(hWnd, GWLP_USERDATA, (LPARAM) (lpcs->lpCreateParams));
     int mSec = static_cast<int>(std::round(1000.0 / (sFPS)));
-    SetTimer(hWnd, IPLUG_TIMER_ID, mSec, NULL);
+    IGraphicsWin* pGraphics = (IGraphicsWin*)GetWindowLongPtr(hWnd, GWLP_USERDATA);
+    pGraphics->mTimerHandle = timeSetEvent(mSec, 0, TimerCallback, reinterpret_cast<DWORD>(hWnd), TIME_PERIODIC);
     SetFocus(hWnd); // gets scroll wheel working straight away
     DragAcceptFiles(hWnd, true);
     return 0;
   }
 
-  IGraphicsWin* pGraphics = (IGraphicsWin*) GetWindowLongPtr(hWnd, GWLP_USERDATA);
-  char txt[MAX_WIN32_PARAM_LEN];
-  double v;
+  IGraphicsWin* pGraphics = (IGraphicsWin*)GetWindowLongPtr(hWnd, GWLP_USERDATA);
 
   if (!pGraphics || hWnd != pGraphics->mPlugWnd)
   {
     return DefWindowProc(hWnd, msg, wParam, lParam);
   }
+
   if (pGraphics->mParamEditWnd && pGraphics->mParamEditMsg == kEditing)
   {
     if (msg == WM_RBUTTONDOWN || (msg == WM_LBUTTONDOWN))
@@ -138,79 +226,6 @@ LRESULT CALLBACK IGraphicsWin::WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARA
     {
       if (wParam == IPLUG_TIMER_ID)
       {
-        if (pGraphics->mParamEditWnd && pGraphics->mParamEditMsg != kNone)
-        {
-          switch (pGraphics->mParamEditMsg)
-          {
-            case kCommit:
-            {
-              SendMessage(pGraphics->mParamEditWnd, WM_GETTEXT, MAX_WIN32_PARAM_LEN, (LPARAM) txt);
-
-              const IParam* pParam = pGraphics->mEdControl->GetParam();
-              
-              if(pParam)
-              {
-                if (pParam->Type() == IParam::kTypeEnum || pParam->Type() == IParam::kTypeBool)
-                {
-                  double vi = 0.;
-                  pParam->MapDisplayText(txt, &vi);
-                  v = (double) vi;
-                }
-                else
-                {
-                  v = atof(txt);
-                  if (pParam->GetNegateDisplay())
-                  {
-                    v = -v;
-                  }
-                }
-                pGraphics->mEdControl->SetValueFromUserInput(pParam->ToNormalized(v));
-              }
-              else
-              {
-                pGraphics->mEdControl->OnTextEntryCompletion(txt);
-              }
-              // Fall through.
-            }
-            case kCancel:
-            {
-              SetWindowLongPtr(pGraphics->mParamEditWnd, GWLP_WNDPROC, (LPARAM) pGraphics->mDefEditProc);
-              DestroyWindow(pGraphics->mParamEditWnd);
-              pGraphics->mParamEditWnd = nullptr;
-              pGraphics->mEdControl = nullptr;
-              pGraphics->mDefEditProc = nullptr;
-            }
-            break;
-          }
-          pGraphics->mParamEditMsg = kNone;
-          return 0; // TODO: check this!
-        }
-
-        IRECTList rects;
-         
-        if (pGraphics->IsDirty(rects))
-        {
-          pGraphics->SetAllControlsClean();
-          IRECT dirtyR = rects.Bounds();
-          dirtyR.ScaleBounds(pGraphics->GetDrawScale());
-          RECT r = { (LONG) dirtyR.L, (LONG) dirtyR.T, (LONG) dirtyR.R, (LONG) dirtyR.B };
-
-          InvalidateRect(hWnd, &r, FALSE);
-
-          if (pGraphics->mParamEditWnd)
-          {
-            IRECT notDirtyR = pGraphics->mEdControl->GetRECT();
-            notDirtyR.ScaleBounds(pGraphics->GetDrawScale());
-            RECT r2 = { (LONG) notDirtyR.L, (LONG) notDirtyR.T, (LONG) notDirtyR.R, (LONG) notDirtyR.B };
-            ValidateRect(hWnd, &r2); // make sure we dont redraw the edit box area
-            UpdateWindow(hWnd);
-            pGraphics->mParamEditMsg = kUpdate;
-          }
-          else
-          {
-            UpdateWindow(hWnd);
-          }
-        }
       }
       return 0;
     }
@@ -379,7 +394,7 @@ LRESULT CALLBACK IGraphicsWin::WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARA
       SetBkColor(dc, RGB(text.mTextEntryBGColor.R, text.mTextEntryBGColor.G, text.mTextEntryBGColor.B));
       SetTextColor(dc, RGB(text.mTextEntryFGColor.R, text.mTextEntryFGColor.G, text.mTextEntryFGColor.B));
       SetBkMode(dc, OPAQUE);
-      return (BOOL) GetStockObject(DC_BRUSH);
+      return reinterpret_cast<BOOL>(GetStockObject(DC_BRUSH));
     }
     case WM_DROPFILES:
     {
@@ -786,6 +801,7 @@ void IGraphicsWin::CloseWindow()
     }
 
     DestroyWindow(mPlugWnd);
+    timeKillEvent(mTimerHandle);
     mPlugWnd = 0;
 
     if (--nWndClassReg == 0)
@@ -1248,7 +1264,7 @@ bool IGraphicsWin::OpenURL(const char* url, const char* msgWindowTitle, const ch
   {
     WCHAR urlWide[IPLUG_WIN_MAX_WIDE_PATH];
     UTF8ToUTF16(urlWide, url, IPLUG_WIN_MAX_WIDE_PATH);
-    if ((int) ShellExecuteW(mPlugWnd, L"open", urlWide, 0, 0, SW_SHOWNORMAL) > MAX_INET_ERR_CODE)
+    if (reinterpret_cast<int>(ShellExecuteW(mPlugWnd, L"open", urlWide, 0, 0, SW_SHOWNORMAL)) > MAX_INET_ERR_CODE)
     {
       return true;
     }
