@@ -14,6 +14,13 @@
 
 #ifdef OS_WIN
 #include "asio.h"
+#define GET_MENU() GetMenu(gHWND)
+#elif defined OS_MAC
+#define GET_MENU() SWELL_GetCurrentMenu()
+#endif
+
+#if defined _DEBUG && !defined NO_IGRAPHICS
+#include "IGraphics.h"
 #endif
 
 // check the input and output devices, find matching srs
@@ -577,14 +584,16 @@ WDL_DLGRET MainDlgProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lParam)
       switch (LOWORD(wParam))
       {
         case ID_QUIT:
+        {
           DestroyWindow(hwndDlg);
           return 0;
+        }
         case ID_ABOUT:
         {
-          bool pluginOpensAboutBox = false;
-
-          //TODO: open about box
-
+          IPlugAPP* pPlug = pAppHost->GetPlug();
+          
+          bool pluginOpensAboutBox = pPlug->OnHostRequestingAboutBox();
+          
           if (pluginOpensAboutBox == false)
           {
             WDL_String info;
@@ -594,14 +603,18 @@ WDL_DLGRET MainDlgProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lParam)
 
           return 0;
         }
-//        case ID_HELP:
-//        {
-//          WDL_String info;
-//          info.Set("open help");
-//          MessageBox(hwndDlg, info.Get(), PLUG_NAME, MB_OK);
-//
-//          return 0;
-//        }
+        case ID_HELP:
+        {
+          IPlugAPP* pPlug = pAppHost->GetPlug();
+
+          bool pluginOpensHelp = pPlug->OnHostRequestingProductHelp();
+
+          if (pluginOpensHelp == false)
+          {
+            MessageBox(hwndDlg, "See the manual", PLUG_NAME, MB_OK);
+          }
+          return 0;
+        }
         case ID_PREFERENCES:
         {
           INT_PTR ret = DialogBox(gHINSTANCE, MAKEINTRESOURCE(IDD_DIALOG_PREF), hwndDlg, IPlugAPPHost::PreferencesDlgProc);
@@ -611,6 +624,62 @@ WDL_DLGRET MainDlgProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lParam)
 
           return 0;
         }
+#if defined _DEBUG && !defined NO_IGRAPHICS
+        case ID_LIVE_EDIT:
+        {
+          IGEditorDelegate* pPlug = dynamic_cast<IGEditorDelegate*>(pAppHost->GetPlug());
+        
+          if(pPlug)
+          {
+            IGraphics* pGraphics = pPlug->GetUI();
+            
+            if(pGraphics)
+            {
+              bool enabled = pGraphics->LiveEditEnabled();
+              pGraphics->EnableLiveEdit(!enabled);
+              CheckMenuItem(GET_MENU(), ID_LIVE_EDIT, MF_BYCOMMAND | enabled ? MF_UNCHECKED : MF_CHECKED);
+            }
+          }
+          
+          return 0;
+        }
+        case ID_SHOW_DRAWN:
+        {
+          IGEditorDelegate* pPlug = dynamic_cast<IGEditorDelegate*>(pAppHost->GetPlug());
+          
+          if(pPlug)
+          {
+            IGraphics* pGraphics = pPlug->GetUI();
+            
+            if(pGraphics)
+            {
+              bool enabled = pGraphics->ShowAreaDrawnEnabled();
+              pGraphics->ShowAreaDrawn(!enabled);
+              CheckMenuItem(GET_MENU(), ID_SHOW_DRAWN, MF_BYCOMMAND | enabled ? MF_UNCHECKED : MF_CHECKED);
+            }
+          }
+          
+          return 0;
+        }
+        case ID_SHOW_FPS:
+        {
+          IGEditorDelegate* pPlug = dynamic_cast<IGEditorDelegate*>(pAppHost->GetPlug());
+          
+          if(pPlug)
+          {
+            IGraphics* pGraphics = pPlug->GetUI();
+            
+            if(pGraphics)
+            {
+              bool enabled = pGraphics->ShowingFPSDisplay();
+              pGraphics->ShowFPSDisplay(!enabled);
+              CheckMenuItem(GET_MENU(), ID_SHOW_FPS, MF_BYCOMMAND | enabled ? MF_UNCHECKED : MF_CHECKED);
+            }
+          }
+          
+          return 0;
+        }
+#endif
       }
       return 0;
   }

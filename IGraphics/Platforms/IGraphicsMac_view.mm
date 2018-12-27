@@ -424,9 +424,8 @@ inline int GetMouseOver(IGraphicsMac* pGraphics)
   if (mGraphics)
   {
     NSPoint pt = [self convertPoint:[pEvent locationInWindow] fromView:nil];
-    // TODO - fix or remove these values!!
-    *pX = pt.x / mGraphics->GetDrawScale();//- 2.f;
-    *pY = pt.y / mGraphics->GetDrawScale();//- 3.f;
+    *pX = pt.x / mGraphics->GetDrawScale();
+    *pY = pt.y / mGraphics->GetDrawScale();
     mPrevX = *pX;
     mPrevY = *pY;
 
@@ -641,7 +640,7 @@ inline int GetMouseOver(IGraphicsMac* pGraphics)
     mGraphics = nullptr;
     pGraphics->SetPlatformContext(nullptr);
     
-    //Close via delegate
+    //For some APIs (AUv2) this is where we know about the window being closed, close via delegate
     pGraphics->GetDelegate()->CloseWindow();
   }
   [super removeFromSuperview];
