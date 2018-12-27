@@ -8,6 +8,8 @@
  ==============================================================================
 */
 
+#include <chrono>
+#include <iostream>
 
 #include <Shlobj.h>
 #include <Shlwapi.h>
@@ -32,9 +34,9 @@ static double sFPS = 0.0;
 #define IPLUG_TIMER_ID 2
 #define IPLUG_WIN_MAX_WIDE_PATH 4096
 
+using namespace std::chrono;
+
 // Unicode helpers
-
-
 void UTF8ToUTF16(wchar_t* utf16Str, const char* utf8Str, int maxLen)
 {
   int requiredSize = MultiByteToWideChar(CP_UTF8, 0, utf8Str, -1, NULL, 0);
@@ -98,6 +100,9 @@ inline IMouseInfo IGraphicsWin::GetMouseInfoDeltas(float& dX, float& dY, LPARAM 
   
   return info;
 }
+
+using ms = duration<float, milliseconds::period>;
+high_resolution_clock::time_point prevFrame = high_resolution_clock::now();
 
 // static
 LRESULT CALLBACK IGraphicsWin::WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
@@ -184,34 +189,6 @@ LRESULT CALLBACK IGraphicsWin::WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARA
           }
           pGraphics->mParamEditMsg = kNone;
           return 0; // TODO: check this!
-        }
-
-        IRECTList rects;
-         
-        if (pGraphics->IsDirty(rects))
-        {
-          pGraphics->SetAllControlsClean();
-          IRECT dirtyR = rects.Bounds();
-          dirtyR.Scale(pGraphics->GetDrawScale());
-          dirtyR.PixelAlign();
-          RECT r = { (LONG) dirtyR.L, (LONG) dirtyR.T, (LONG) dirtyR.R, (LONG) dirtyR.B };
-
-          InvalidateRect(hWnd, &r, FALSE);
-
-          if (pGraphics->mParamEditWnd)
-          {
-            IRECT notDirtyR = pGraphics->mEdControl->GetRECT();
-            notDirtyR.Scale(pGraphics->GetDrawScale());
-            notDirtyR.PixelAlign();
-            RECT r2 = { (LONG) notDirtyR.L, (LONG) notDirtyR.T, (LONG) notDirtyR.R, (LONG) notDirtyR.B };
-            ValidateRect(hWnd, &r2); // make sure we dont redraw the edit box area
-            UpdateWindow(hWnd);
-            pGraphics->mParamEditMsg = kUpdate;
-          }
-          else
-          {
-            UpdateWindow(hWnd);
-          }
         }
       }
       return 0;
@@ -351,24 +328,66 @@ LRESULT CALLBACK IGraphicsWin::WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARA
     }
     case WM_PAINT:
     {
-      RECT r;
-      if (GetUpdateRect(hWnd, &r, FALSE))
+      high_resolution_clock::time_point now = high_resolution_clock::now();
+
+      auto diff = ms(now - prevFrame);
+
+      if (diff > ms(1000./static_cast<float>(pGraphics->FPS())))
       {
-        #ifdef IGRAPHICS_NANOVG
-        PAINTSTRUCT ps;
-        BeginPaint(hWnd, &ps);
-        #endif
-        IRECT ir(r.left, r.top, r.right, r.bottom);
         IRECTList rects;
-        ir.Scale(1. / pGraphics->GetDrawScale());
-        ir.PixelAlign();
-        rects.Add(ir);
-        pGraphics->Draw(rects);
-        #ifdef IGRAPHICS_NANOVG
-        SwapBuffers((HDC)pGraphics->mPlatformContext);
-        EndPaint(hWnd, &ps);
-        #endif
+
+        if (pGraphics->IsDirty(rects))
+        {
+          pGraphics->SetAllControlsClean();
+          IRECT dirtyR = rects.Bounds();
+          dirtyR.Scale(pGraphics->GetDrawScale());
+          dirtyR.PixelAlign();
+          RECT r = { (LONG)dirtyR.L, (LONG)dirtyR.T, (LONG)dirtyR.R, (LONG)dirtyR.B };
+
+          InvalidateRect(hWnd, &r, FALSE);
+
+          if (pGraphics->mParamEditWnd)
+          {
+            IRECT notDirtyR = pGraphics->mEdControl->GetRECT();
+            notDirtyR.Scale(pGraphics->GetDrawScale());
+            notDirtyR.PixelAlign();
+            RECT r2 = { (LONG)notDirtyR.L, (LONG)notDirtyR.T, (LONG)notDirtyR.R, (LONG)notDirtyR.B };
+            ValidateRect(hWnd, &r2); // make sure we dont redraw the edit box area
+            UpdateWindow(hWnd);
+            pGraphics->mParamEditMsg = kUpdate;
+          }
+          //else
+          //{
+          //  UpdateWindow(hWnd);
+          //}
+        }
+
+        RECT r;
+        if (GetUpdateRect(hWnd, &r, FALSE))
+        {
+#ifdef IGRAPHICS_NANOVG
+          PAINTSTRUCT ps;
+          BeginPaint(hWnd, &ps);
+#endif
+          IRECT ir(r.left, r.top, r.right, r.bottom);
+          IRECTList rects;
+          ir.Scale(1. / pGraphics->GetDrawScale());
+          ir.PixelAlign();
+          rects.Add(ir);
+          pGraphics->Draw(rects);
+#ifdef IGRAPHICS_NANOVG
+          SwapBuffers((HDC)pGraphics->mPlatformContext);
+          EndPaint(hWnd, &ps);
+#endif
+        }
+
+        //DBGMSG("%f\n", diff.count());
+        prevFrame = now;
       }
+
+      RECT r = { 0, 0, 1, 1 };
+      InvalidateRect(pGraphics->mPlugWnd, &r, FALSE);
+
       return 0;
     }
 
