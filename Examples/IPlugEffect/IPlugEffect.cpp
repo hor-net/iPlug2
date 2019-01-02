@@ -9,7 +9,7 @@ IPlugEffect::IPlugEffect(IPlugInstanceInfo instanceInfo)
 
 #if IPLUG_EDITOR // All UI methods and member variables should be within an IPLUG_EDITOR guard, should you want distributed UI
   mMakeGraphicsFunc = [&]() {
-    return MakeGraphics(*this, PLUG_WIDTH, PLUG_HEIGHT, 60, 1.);
+    return MakeGraphics(*this, PLUG_WIDTH, PLUG_HEIGHT, PLUG_FPS, 1.);
   };
   
   mLayoutFunc = [&](IGraphics* pGraphics) {
@@ -17,6 +17,17 @@ IPlugEffect::IPlugEffect(IPlugInstanceInfo instanceInfo)
     pGraphics->AttachPanelBackground(COLOR_GRAY);
     pGraphics->LoadFont(ROBOTTO_FN);
     const IRECT b = pGraphics->GetBounds();
+
+    pGraphics->AttachControl(new ILambdaControl(*this, b, [](IControl* pCaller, IGraphics& g, IRECT& r, IMouseInfo&, double t)
+    {
+      for (int i = 0; i < 8; i++)
+      {
+        IRECT bar = r.SubRectVertical(8, i);
+        g.FillRect(COLOR_RED, bar.FracRect(EDirection::kHorizontal, fmodf(t + (0.2 * i), 1.f)), nullptr);
+      }
+
+    }, 10000, true, true));
+
     pGraphics->AttachControl(new ITextControl(*this, b, "Hello iPlug 2!", IText(50)));
     pGraphics->AttachControl(new IVKnobControl(*this, b.GetCentredInside(100).GetVShifted(-100), kGain));
   };
