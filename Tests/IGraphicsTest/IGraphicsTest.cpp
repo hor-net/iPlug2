@@ -11,7 +11,7 @@ enum EParam
 
 enum EControlTags
 {
-  kSizeControl = 0,
+  kCtrlTagSize = 0
 };
 
 IGraphicsTest::IGraphicsTest(IPlugInstanceInfo instanceInfo)
@@ -28,8 +28,8 @@ IGraphicsTest::IGraphicsTest(IPlugInstanceInfo instanceInfo)
     if(pGraphics->NControls())
     {
       IRECT bounds = pGraphics->GetBounds();
-      pGraphics->GetControl(0)->SetRECT(bounds);
-      pGraphics->GetControlWithTag(kSizeControl)->SetRECT(bounds);
+      pGraphics->GetBackgroundControl()->SetRECT(bounds);
+      pGraphics->GetControlWithTag(kCtrlTagSize)->SetRECT(bounds);
       DBGMSG("SELECTED: W %i, H%i\n", pGraphics->Width(), pGraphics->Height());
       
       return;
@@ -38,9 +38,20 @@ IGraphicsTest::IGraphicsTest(IPlugInstanceInfo instanceInfo)
     pGraphics->AttachCornerResizer(EUIResizerMode::kUIResizerScale, true);
     pGraphics->HandleMouseOver(true);
     pGraphics->EnableTooltips(true);
-    //  pGraphics->EnableLiveEdit(true);
-    //  pGraphics->ShowControlBounds(true);
-//    pGraphics->ShowAreaDrawn(true);
+    
+    pGraphics->SetKeyHandlerFunc([&](const IKeyPress& key)
+    {
+      switch (key.VK) {
+        case VK_TAB:
+          dynamic_cast<IPanelControl*>(GetUI()->GetBackgroundControl())->SetPattern(IColor::GetRandomColor());
+          break;
+          
+        default:
+          break;
+      }
+      return true;
+    });
+    
     pGraphics->LoadFont(ROBOTTO_FN);
     pGraphics->LoadFont(MONTSERRAT_FN);
     ISVG tiger = pGraphics->LoadSVG(TIGER_FN);
@@ -103,17 +114,20 @@ IGraphicsTest::IGraphicsTest(IPlugInstanceInfo instanceInfo)
     pGraphics->AttachControl(new TestAnimationControl(*this, nextCell()));
     pGraphics->AttachControl(new TestDrawContextControl(*this, nextCell()));
     pGraphics->AttachControl(new TestSVGControl(*this, nextCell(), tiger));
-    pGraphics->AttachControl(new TestSizeControl(*this, bounds), kSizeControl);
+    pGraphics->AttachControl(new TestImageControl(*this, nextCell()));
     pGraphics->AttachControl(new TestLayerControl(*this, nextCell()));
     pGraphics->AttachControl(new TestBlendControl(*this, nextCell(), smiley));
+    pGraphics->AttachControl(new TestDropShadowControl(*this, nextCell(), tiger));
+    pGraphics->AttachControl(new TestCursorControl(*this, nextCell()));
+    pGraphics->AttachControl(new TestKeyboardControl(*this, nextCell()));
+    pGraphics->AttachControl(new TestSizeControl(*this, bounds), kCtrlTagSize);
 
-#if 1
+#if 0
     pGraphics->AttachControl(new ITextControl(*this, nextCell(), "Hello World!", {24, COLOR_WHITE, "Roboto-Regular", IText::kStyleNormal, IText::kAlignNear, IText::kVAlignTop, 90}));
     pGraphics->AttachControl(new ITextControl(*this, nextCell(), "Two!", {18, COLOR_GREEN, "Montserrat-LightItalic", IText::kStyleItalic, IText::kAlignCenter, IText::kVAlignMiddle, 45}));
     pGraphics->AttachControl(new ITextControl(*this, nextCell(), "Three!", {24, COLOR_RED, "Roboto-Regular", IText::kStyleNormal, IText::kAlignFar, IText::kVAlignBottom}));
     pGraphics->AttachControl(new ITextControl(*this, nextCell(), "Four!", {40, COLOR_ORANGE, "Roboto-Regular", IText::kStyleNormal, IText::kAlignCenter, IText::kVAlignBottom}));
 #endif
-      
   };
   
 #endif

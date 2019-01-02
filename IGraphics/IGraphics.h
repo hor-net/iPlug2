@@ -13,6 +13,13 @@
 /**
  * @file
  * @copydoc IGraphics
+ * @defgroup IGraphicsStructs IGraphics::Structs
+ * @defgroup DrawClasses IGraphics::DrawClasses
+ * @defgroup PlatformClasses IGraphics::PlatformClasses
+ * @defgroup Controls IGraphics::IControls
+ * @defgroup BaseControls IGraphics::IControls::BaseControls
+ * @defgroup SpecialControls IGraphics::IControls::SpecialControls
+ * @defgroup TestControls IGraphics::IControls::TestControls
  */
 
 #ifndef NO_IGRAPHICS
@@ -34,10 +41,10 @@
 #include "IGraphicsPopupMenu.h"
 #include "IGraphicsEditorDelegate.h"
 
+#include "heapbuf.h"
 #include <stack>
 #include <memory>
 
-#ifdef OS_MAC
 #ifdef FillRect
 #undef FillRect
 #endif
@@ -45,18 +52,13 @@
 #ifdef DrawText
 #undef DrawText
 #endif
-#endif
 
 class IControl;
 class IPopupMenuControl;
-class ICornerResizerBase;
+class ITextEntryControl;
+class ICornerResizerControl;
 class IFPSDisplayControl;
 class IParam;
-
-/**
- * \defgroup DrawClasses IGraphics::DrawClasses
- * \defgroup PlatformClasses IGraphics::PlatformClasses
-*/
 
 /**  The lowest level base class of an IGraphics context */
 class IGraphics
@@ -192,7 +194,7 @@ public:
    * @param cRBL The bottom left corner radius in pixels
    * @param pBlend Optional blend method, see IBlend documentation
    * @param thickness Optional line thickness */
-  virtual void DrawRoundRect(const IColor& color, const IRECT& bounds, float cRTL, float cRTR, float cRBR, float cRBL, const IBlend* pBlend = 0, float thickness = 1.f) {} ;
+  virtual void DrawRoundRect(const IColor& color, const IRECT& bounds, float cRTL, float cRTR, float cRBR, float cRBL, const IBlend* pBlend = 0, float thickness = 1.f) = 0;
   
   /** Draw an arc to the graphics context
    * @param color The color to draw the shape with
@@ -219,7 +221,7 @@ public:
    * @param bounds The rectangular region to draw the shape in
    * @param pBlend Optional blend method, see IBlend documentation
    * @param thickness Optional line thickness */
-  virtual void DrawEllipse(const IColor& color, const IRECT& bounds, const IBlend* pBlend = 0, float thickness = 1.f) {};
+  virtual void DrawEllipse(const IColor& color, const IRECT& bounds, const IBlend* pBlend = 0, float thickness = 1.f) = 0;
   
   /** Draw an ellipse around a central point given two radii and an angle of orientation
    * @param color The color to draw the shape with
@@ -230,7 +232,7 @@ public:
    * @param angle The angle rotates the radii r1 and r2 clockwise in degrees to adjust the orientation
    * @param pBlend Optional blend method, see IBlend documentation
    * @param thickness Optional line thickness */
-  virtual void DrawEllipse(const IColor& color, float x, float y, float r1, float r2, float angle = 0.0, const IBlend* pBlend = 0, float thickness = 1.f) {};
+  virtual void DrawEllipse(const IColor& color, float x, float y, float r1, float r2, float angle = 0.0, const IBlend* pBlend = 0, float thickness = 1.f) = 0;
 
   /** Draw a convex polygon to the graphics to the graphics context
    * @param color The color to draw the shape with
@@ -280,7 +282,7 @@ public:
    * @param cRBR The bottom right corner radius in pixels
    * @param cRBL The bottom left corner radius in pixels
    * @param pBlend Optional blend method, see IBlend documentation */
-  virtual void FillRoundRect(const IColor& color, const IRECT& bounds, float cRTL, float cRTR, float cRBR, float cRBL, const IBlend* pBlend = 0) {} ;
+  virtual void FillRoundRect(const IColor& color, const IRECT& bounds, float cRTL, float cRTR, float cRBR, float cRBL, const IBlend* pBlend = 0) = 0;
   
   /** Fill a circle in the graphics context with a color
    * @param color The color to fill the shape with
@@ -294,7 +296,7 @@ public:
    * @param color The color to fill the shape with
    * @param bounds The rectangular region to fill the shape in
    * @param pBlend Optional blend method, see IBlend documentation */
-  virtual void FillEllipse(const IColor& color, const IRECT& bounds, const IBlend* pBlend = 0) {};
+  virtual void FillEllipse(const IColor& color, const IRECT& bounds, const IBlend* pBlend = 0) = 0;
   
   /** Fill an ellipse in the graphics context
    * @param color The color to draw the shape with
@@ -304,7 +306,7 @@ public:
    * @param r2 The radius of the ellipse along the line found by rotating the y-axis by the angle
    * @param angle The angle rotates the radii r1 and r2 clockwise in degrees to adjust the orientation
    * @param pBlend Optional blend method, see IBlend documentation */
-  virtual void FillEllipse(const IColor& color, float x, float y, float r1, float r2, float angle = 0.0, const IBlend* pBlend = 0) {};
+  virtual void FillEllipse(const IColor& color, float x, float y, float r1, float r2, float angle = 0.0, const IBlend* pBlend = 0) = 0;
   
   /** Fill an arc segment in the graphics context with a color
    * @param color The color to fill the shape with
@@ -364,7 +366,10 @@ public:
   virtual void RetainBitmap(const IBitmap& bitmap, const char* cacheName);
   virtual void ReleaseBitmap(const IBitmap& bitmap);
   IBitmap GetScaledBitmap(IBitmap& src);
-
+  
+  /** Checks a file extension and reports whether this drawing API supports loading that extension */
+  virtual bool BitmapExtSupported(const char* ext) = 0;
+  
 #pragma mark - IGraphics base implementation - drawing helpers
 
   /** Draws a bitmap into the graphics context. NOTE: this helper method handles multi-frame bitmaps, indexable via frame
@@ -444,10 +449,17 @@ public:
 #pragma mark - IGraphics drawing API layer support
     
   void StartLayer(const IRECT& r);
+  void ResumeLayer(ILayerPtr& layer);
   ILayerPtr EndLayer();
   bool CheckLayer(const ILayerPtr& layer);
   void DrawLayer(const ILayerPtr& layer);
   void DrawRotatedLayer(const ILayerPtr& layer, double angle);
+    
+  /** Applies a dropshadow directly onto a layer
+  * @param layer - the layer to add the shadow to 
+  * @param shadow - the shadow to add */
+  void ApplyLayerDropShadow(ILayerPtr& layer, const IShadow& shadow);
+    
 private:
   virtual void UpdateLayer() {}
 
@@ -509,16 +521,16 @@ public:
     
 #pragma mark - IGraphics platform implementation
   /** Call to hide the mouse cursor */ 
-  virtual void HideMouseCursor(bool hide = true, bool lock = true) {};
+  virtual void HideMouseCursor(bool hide = true, bool lock = true) = 0;
 
   /** Force move the mouse cursor to a specific position in the graphics context
    * @param x New X position in pixels
    * @param y New Y position in pixels */
-  virtual void MoveMouseCursor(float x, float y) {}
+  virtual void MoveMouseCursor(float x, float y) = 0;
   
   /** Sets the mouse cursor to one of ECursor
    * @param cursor The cursor type */
-  virtual void SetMouseCursor(ECursor cursor = ECursor::ARROW) {}
+  virtual void SetMouseCursor(ECursor cursor = ECursor::ARROW) = 0;
 
   /** Call to force end text entry (will cancel any half input text \todo check) */
   virtual void ForceEndUserEdit() = 0;
@@ -553,12 +565,12 @@ public:
    * @return \todo check */
   virtual int ShowMessageBox(const char* str, const char* caption, EMessageBoxType type) = 0;
 
-  /** Create a platform text entry box
+  /** Create a text entry box
    * @param control The control that the text entry belongs to. If this control is linked to a parameter, the text entry will be configured with initial text matching the parameter value
    * @param text An IText struct to set the formatting of the text entry box
    * @param bounds The rectangular region in the graphics context that the text entry will occupy.
    * @param str A CString to specify the default text to display when the text entry box is opened (unless the control specified by the first argument is linked to a parameter) */
-  virtual void CreateTextEntry(IControl& control, const IText& text, const IRECT& bounds, const char* str = "") = 0;
+  void CreateTextEntry(IControl& control, const IText& text, const IRECT& bounds, const char* str = "");
 
   /** Create a platform file prompt dialog to choose a file/directory path for opening/saving a file/directory. NOTE: this method will block the main thread
    * @param fileName Non const WDL_String reference specifying the file name. Set this prior to calling the method for save dialogs, to provide a default file name. For load dialogs, on successful selection of a file this will get set to the file’s name.
@@ -595,12 +607,12 @@ public:
    * @return \c true on success (if the path was valid) */
   virtual bool RevealPathInExplorerOrFinder(WDL_String& path, bool select = false) { return false; }
 
-  /** Used on Windows to set the HINSTANCE handle, which allows graphics APIs to load resources from the binary. \todo doesn’t this do something on Mac too?
-   * @param pInstance void pointer to the platform instance */
-  virtual void SetPlatformInstance(void* pInstance) {}
+  /** Used on Windows to set the HINSTANCE module handle, which allows graphics APIs to load resources from the binary.
+   * @param pHinstance void pointer to the platform instance */
+  virtual void SetWinModuleHandle(void* pHinstance) {}
 
-  /** Get a void pointer that can be cast back to HINSTANCE \todo what about Mac? */
-  virtual void* GetPlatformInstance() { return nullptr; }
+  /** @return a void pointer that can be cast back to HINSTANCE to get the module handle on windows, returns nullptr on other platforms */
+  virtual void* GetWinModuleHandle() { return nullptr; }
 
   /** Set the platform draw context
    * Used in order to set the platform level draw context - CGContextRef context on macOS and the GDI HDC draw context handle on Windows.
@@ -616,20 +628,31 @@ public:
    * @param y the y position to convert */
   virtual void ClientToScreen(float& x, float& y) {};
 
-  /** Find the full, absolute path of a resource based on it's file name (e.g. “background.png”) and type (e.g. “PNG”)
-   * On macOS resources are usually included inside the bundle resources folder. In that case you provide a filename and this method will return the absolute path to the resource. In some cases you may want to provide an absolute path to a file in a shared resources folder here (for example if you want to reduce the disk footprint of multiple bundles, such as when you have multiple plug-in formats installed).
-   * On Windows resources are usually baked into the binary via the resource compiler. In this case the fileName argument is the resource id. The .rc file must include these ids, otherwise you may hit a runtime assertion. It is also possible to pass in an absolute path in order to share resources between binaries.
-   * Behind the scenes this method will make sure resources are loaded statically in memory.
-   * @param filename The resource filename including extension. If no resource is found the method will then check fileName as if it is an absolute path.
-   * @param type \todo
-   * @param result WDL_String which will contain the full path of the resource of success
+  /** Find the absolute path of a resource based on it's file name (e.g. “background.png”) and type (e.g. “png”), or in the case of windows, 
+   * confirm the existence of a particular resource in the binary. If it fails to find the resource with the binary it will test the fileNameOrResID argument
+   * as an absolute path, to see if the file exists in that place.
+   * On macOS resources are usually included inside the bundle resources folder.
+   * On Windows resources are usually baked into the binary via the resource compiler. In this case the fileName argument is the resource id to look for. 
+   * The .rc file must include these ids, otherwise you may hit a runtime assertion when you come to load the file.
+   * In some cases you may want to provide an absolute path to a file in a shared resources folder
+   * here (for example if you want to reduce the disk footprint of multiple bundles, such as when you have multiple plug-in formats installed).
+   *
+   * @param fileNameOrResID The filename or resourceID including extension. If no resource is found this argument is tested as an absolute path.
+   * @param type The resource type (file extension) in lower or upper case, e.g. ttf or TTF for a truetype font 
+   * @param result WDL_String which will either contain the full path to the resource on disk, or the ful Windows resourceID on success
    * @return \c true on success */
-  virtual bool OSFindResource(const char* fileName, const char* type, WDL_String& result) = 0;
+  virtual EResourceLocation OSFindResource(const char* fileNameOrResID, const char* type, WDL_String& result) = 0;
+
+  /** Load a resource from the binary (windows only).
+   * @param type The resource type in lower or upper case, e.g. ttf or TTF for a truetype font
+   * @return const void pointer to the data if successfull on windows. Returns nullptr if unsuccessfull or on platforms other than windows */
+  virtual const void* LoadWinResource(const char* resID, const char* type, int& sizeInBytes) { return nullptr; }
 
   /** Get the bundle ID on macOS and iOS, returns emtpy string on other OSs */
   virtual const char* GetBundleID() { return ""; }
 #pragma mark - IGraphics base implementation
   IGraphics(IGEditorDelegate& dlg, int w, int h, int fps = 0, float scale = 1.);
+
   virtual ~IGraphics();
 
   /** Called by the platform IGraphics class XXXXX /todo and when moving to a new screen with different DPI
@@ -659,14 +682,14 @@ public:
    * @param str The new value as a CString */
   void SetControlValueFromStringAfterPrompt(IControl& control, const char* str);
 
-  /** Shows a platform pop up/contextual menu in relation to a rectangular region of the graphics context
+  /** Shows a pop up/contextual menu in relation to a rectangular region of the graphics context
    * @param menu Reference to an IPopupMenu class populated with the items for the platform menu
    * @param bounds The platform menu will popup at the bottom left hand corner of this rectangular region
    * @param pCaller A pointed to the IControl creating this pop-up menu. If it exists IControl::OnPopupMenuSelection() will be called on successful selection
    * @return Pointer to an IPopupMenu that represents the menu that user finally clicked on (might not be the same as menu if they clicked a submenu) */
-  virtual IPopupMenu* CreatePopupMenu(IPopupMenu& menu, const IRECT& bounds, IControl* pCaller = nullptr) = 0;
+  IPopupMenu* CreatePopupMenu(IPopupMenu& menu, const IRECT& bounds, IControl* pCaller = nullptr);
 
-  /** Shows a platform pop up/contextual menu at point in the graphics context
+  /** Shows a pop up/contextual menu at point in the graphics context
    * @param x The X coordinate in the graphics context at which to pop up the menu
    * @param y The Y coordinate in the graphics context at which to pop up the menu
    * @param pCaller A pointer to the IControl creating this pop-up menu. If it exists IControl::OnPopupMenuSelection() will be called on successful selection
@@ -742,15 +765,15 @@ public:
   void AttachCornerResizer(EUIResizerMode sizeMode = EUIResizerMode::kUIResizerScale, bool layoutOnResize = false);
 
   /** Attach your own control to scale or increase the UI size by dragging the plug-in bottom right-hand corner
-   * @param pControl control a control that inherits from ICornerResizerBase
+   * @param pControl control a control that inherits from ICornerResizerControl
    * @param sizeMode Choose whether to scale or size the UI */
-  void AttachCornerResizer(ICornerResizerBase* pControl, EUIResizerMode sizeMode = EUIResizerMode::kUIResizerScale, bool layoutOnResize = false);
+  void AttachCornerResizer(ICornerResizerControl* pControl, EUIResizerMode sizeMode = EUIResizerMode::kUIResizerScale, bool layoutOnResize = false);
 
   /** Attach a control for pop-up menus, to override platform style menus
    * @param pControl A control that inherits from IPopupMenuControl */
   void AttachPopupMenuControl(const IText& text = DEFAULT_TEXT, const IRECT& bounds = IRECT());
   
-  void SetKeyHandlerFunc(std::function<bool(int)> keyHandlerFunc) { mKeyHandlerFunc = keyHandlerFunc; }
+  void SetKeyHandlerFunc(std::function<bool(const IKeyPress& key)> keyHandlerFunc) { mKeyHandlerFunc = keyHandlerFunc; }
   
   /** Shows a control to display the frame rate of drawing
    * @param enable \c true to show */
@@ -758,6 +781,12 @@ public:
   
   /** @return \c true if performance display is shown */
   bool ShowingFPSDisplay() { return mPerfDisplay != nullptr; }
+  /** Attach a control for displaying the FPS on top of the UI */
+  void AttachPerformanceDisplay();
+  
+  /** Attach a control for text entry, to override platform text entry */
+  void AttachTextEntryControl();
+  
   /** Attach an IControl to the graphics context and add it to the top of the control stack. The control is owned by the graphics context and will be deleted when the context is deleted.
    * @param pControl A pointer to an IControl to attach.
    * @param controlTag An integer tag that you can use to identify the control
@@ -776,6 +805,9 @@ public:
   /** Get a pointer to the IControl that is currently captured i.e. during dragging
    * @return Pointer to currently captured control */
   IControl* GetCapturedControl() { return mMouseCapture; }
+
+  /* Get the first control in the control list, the background */
+  IControl* GetBackgroundControl() { return GetControl(0);  }
   
   /** @return The number of controls that have been added to this graphics context */
   int NControls() const { return mControls.GetSize(); }
@@ -844,9 +876,9 @@ public:
 
   /** @param x The X coordinate in the graphics context of the mouse cursor at the time of the key press
    * @param y The Y coordinate in the graphics context of the mouse cursor at the time of the key press
-   * @param key An integer represent the key pressed, see EIPlugKeyCodes
+   * @param \todo
    * @return \c true if handled \todo check this */
-  bool OnKeyDown(float x, float y, int key);
+  bool OnKeyDown(float x, float y, const IKeyPress& key);
 
   /** @param x The X coordinate in the graphics context at which to draw
    * @param y The Y coordinate in the graphics context at which to draw
@@ -881,7 +913,7 @@ public:
   void AssignParamNameToolTips();
 
   /** @param enable Set \c true if you wish to draw the rectangular region of the graphics context occupied by each IControl in mControls  */
-  inline void ShowControlBounds(bool enable) { mShowControlBounds = enable; }
+  inline void ShowControlBounds(bool enable) { mShowControlBounds = enable; SetAllControlsDirty(); }
 
   /** @param enable Set \c true if you wish to show the rectangular region that is drawn on each frame, in order to debug redraw problems */
   inline void ShowAreaDrawn(bool enable) { mShowAreaDrawn = enable; if(!enable) SetAllControlsDirty(); }
@@ -889,6 +921,9 @@ public:
   /**@return \c true if showning the area drawn on each frame */
   bool ShowAreaDrawnEnabled() const { return mShowAreaDrawn; }
 
+  /**@return \c true if showning the control bounds */
+  bool ShowControlBoundsEnabled() const { return mShowControlBounds; }
+  
   /** Live edit mode allows you to relocate controls at runtime in debug builds and save the locations to a predefined file (e.g. main plugin .cpp file) \todo we need a separate page for liveedit info
    * @param enable Set \c true if you wish to enable live editing mode
    * @param file The absolute path of the file which contains the layout info (correctly tagged) for live editing
@@ -927,6 +962,7 @@ public:
   EUIResizerMode GetResizerMode() const { return mGUISizeMode; }
   
   IPopupMenuControl* GetPopupMenuControl() { return mPopupControl; }
+  ITextEntryControl* GetTextEntryControl() { return mTextEntryControl; }
   
   void StyleAllVectorControls(bool drawFrame, bool drawShadow, bool emboss, float roundness, float frameThickness, float shadowOffset, const IVColorSpec& spec = DEFAULT_SPEC);
 #pragma mark - Plug-in API Specific
@@ -954,31 +990,51 @@ public:
    * @param y The Y coordinate in the graphics context at which to popup the context menu */
   void PopupHostContextMenuForParam(int controlIdx, int paramIdx, float x, float y);
 
-#pragma mark - Resource Loading
-  /** Load a bitmap image from disk
-   * @param fileName CString file name
+#pragma mark - Resource/File Loading
+  /** Load a bitmap image from disk or from windows resource
+   * @param fileNameOrResID CString file name or resource ID
    * @param nStates The number of states/frames in a multi-frame stacked bitmap
    * @param framesAreHorizontal Set \c true if the frames in a bitmap are stacked horizontally
    * @param targetScale Set \c to a number > 0 to explicity load e.g. an @2x.png
    * @return An IBitmap representing the image */
-  virtual IBitmap LoadBitmap(const char* fileName, int nStates = 1, bool framesAreHorizontal = false, int targetScale = 0);
+  virtual IBitmap LoadBitmap(const char* fileNameOrResID, int nStates = 1, bool framesAreHorizontal = false, int targetScale = 0);
 
-  /** Load an SVG from disk
-   * @param fileName A CString absolute path to the SVG on disk
+  /** Load an SVG from disk or from windows resource
+   * @param fileNameOrResID A CString absolute path or resource ID
    * @return An ISVG representing the image */
-  virtual ISVG LoadSVG(const char* fileName);
+  virtual ISVG LoadSVG(const char* fileNameOrResID, const char* units = "px", float dpi = 72.f);
 
-  /** @param fileName The name of the font to load */
-  virtual void LoadFont(const char* fileName) {};
+  /** @param fileNameOrResID A CString absolute path or resource ID
+   * @return \c true on success */
+  virtual bool LoadFont(const char* fileNameOrResID) { return false; }
   
 protected:
-  virtual APIBitmap* LoadAPIBitmap(const WDL_String& resourcePath, int scale) = 0;
+  virtual void CreatePlatformTextEntry(IControl& control, const IText& text, const IRECT& bounds, const char* str = "") = 0;
+  virtual IPopupMenu* CreatePlatformPopupMenu(IPopupMenu& menu, const IRECT& bounds, IControl* pCaller = nullptr) = 0;
+
+  typedef WDL_TypedBuf<unsigned char> RawBitmapData;
+
+  virtual APIBitmap* LoadAPIBitmap(const char* fileNameOrResID, int scale, EResourceLocation location, const char* ext) = 0;
   virtual APIBitmap* ScaleAPIBitmap(const APIBitmap* pBitmap, int scale) = 0;
   virtual APIBitmap* CreateAPIBitmap(int width, int height) = 0;
     
+  virtual int AlphaChannel() const = 0;
+  virtual bool FlippedBitmap() const = 0;
+
+  virtual void GetLayerBitmapData(const ILayerPtr& layer, RawBitmapData& data) = 0;
+  virtual void ApplyShadowMask(ILayerPtr& layer, RawBitmapData& mask, const IShadow& shadow) = 0;
+
+  void PushLayer(ILayer* layer, bool clearTransforms);
+  ILayer* PopLayer(bool clearTransforms);
+    
+  /** Utility used by SearchImageResource/SearchBitmapInCache */
   inline void SearchNextScale(int& sourceScale, int targetScale);
-  bool SearchImageResource(const char* name, const char* type, WDL_String& result, int targetScale, int& sourceScale);
-  APIBitmap* SearchBitmapInCache(const char* name, int targetScale, int& sourceScale);
+
+  /** Search for a bitmap image resource matching the target scale */
+  EResourceLocation SearchImageResource(const char* fileName, const char* type, WDL_String& result, int targetScale, int& sourceScale);
+
+  /** Search the static storage cache for a bitmap image resource matching the target scale */
+  APIBitmap* SearchBitmapInCache(const char* fileName, int targetScale, int& sourceScale);
 
   virtual bool DoDrawMeasureText(const IText& text, const char* str, IRECT& bounds, const IBlend* pBlend = nullptr, bool measure = false) = 0;
     
@@ -992,6 +1048,7 @@ protected:
   IGEditorDelegate& mDelegate;
   void* mPlatformContext = nullptr;
   bool mCursorHidden = false;
+  bool mCursorLock = false;
   bool mTabletInput = false;
   float mCursorX = -1.f;
   float mCursorY = -1.f;
@@ -1019,9 +1076,10 @@ private:
 
   // Order (front-to-back) ToolTip / PopUp / TextEntry / LiveEdit / Corner / PerfDisplay
   
-  ICornerResizerBase* mCornerResizer = nullptr;
+  ICornerResizerControl* mCornerResizer = nullptr;
   IPopupMenuControl* mPopupControl = nullptr;
   IFPSDisplayControl* mPerfDisplay = nullptr;
+  ITextEntryControl* mTextEntryControl = nullptr;
   IControl* mLiveEdit = nullptr;
   
   IPopupMenu mPromptPopupMenu;
@@ -1053,10 +1111,10 @@ private:
   bool mLayoutOnResize = false;
   EUIResizerMode mGUISizeMode = EUIResizerMode::kUIResizerScale;
   double mPrevTimestamp = 0.;
-  std::function<bool(int key)> mKeyHandlerFunc = nullptr;
+  std::function<bool(const IKeyPress& key)> mKeyHandlerFunc = nullptr;
 protected:
   friend class IGraphicsLiveEdit;
-  friend class ICornerResizerBase;
+  friend class ICornerResizerControl;
   
   std::stack<ILayer*> mLayers;
 };

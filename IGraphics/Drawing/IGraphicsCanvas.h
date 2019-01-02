@@ -19,6 +19,8 @@
 
 using namespace emscripten;
 
+/** An HTML5 canvas API bitmap
+ * @ingroup APIBitmaps */
 class CanvasBitmap : public APIBitmap
 {
 public:
@@ -55,10 +57,17 @@ public:
   IColor GetPoint(int x, int y) override { return COLOR_BLACK; } // TODO:
   void* GetDrawContext() override { return nullptr; }
 
+  bool BitmapExtSupported(const char* ext) override;
 protected:
-  APIBitmap* LoadAPIBitmap(const WDL_String& resourcePath, int scale) override;
+  APIBitmap* LoadAPIBitmap(const char* fileNameOrResID, int scale, EResourceLocation location, const char* ext) override;
   APIBitmap* ScaleAPIBitmap(const APIBitmap* pBitmap, int scale) override;
   APIBitmap* CreateAPIBitmap(int width, int height) override;
+
+  int AlphaChannel() const override { return 3; }
+  bool FlippedBitmap() const override { return false; }
+
+  void GetLayerBitmapData(const ILayerPtr& layer, RawBitmapData& data) override;
+  void ApplyShadowMask(ILayerPtr& layer, RawBitmapData& mask, const IShadow& shadow) override;
 
   bool DoDrawMeasureText(const IText& text, const char* str, IRECT& bounds, const IBlend* pBlend, bool measure) override;
 
@@ -77,6 +86,6 @@ private:
   void PathTransformSetMatrix(const IMatrix& m) override;
   void SetClipRegion(const IRECT& r) override;
     
-  void SetCanvasSourcePattern(const IPattern& pattern, const IBlend* pBlend = nullptr);
+  void SetCanvasSourcePattern(val& context, const IPattern& pattern, const IBlend* pBlend = nullptr);
   void SetCanvasBlendMode(const IBlend* pBlend);
 };

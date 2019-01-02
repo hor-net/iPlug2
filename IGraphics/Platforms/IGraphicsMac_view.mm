@@ -419,17 +419,15 @@ inline int GetMouseOver(IGraphicsMac* pGraphics)
   }
 }
 
-- (void) getMouseXY: (NSEvent*) pEvent x: (float*) pX y: (float*) pY
+- (void) getMouseXY: (NSEvent*) pEvent x: (float&) pX y: (float&) pY
 {
   if (mGraphics)
   {
     NSPoint pt = [self convertPoint:[pEvent locationInWindow] fromView:nil];
-    *pX = pt.x / mGraphics->GetDrawScale();
-    *pY = pt.y / mGraphics->GetDrawScale();
-    mPrevX = *pX;
-    mPrevY = *pY;
-
-    // Detect tablet input correctly
+    pX = pt.x / mGraphics->GetDrawScale();
+    pY = pt.y / mGraphics->GetDrawScale();
+   
+    mGraphics->DoCursorLock(pX, pY, mPrevX, mPrevY);
     mGraphics->SetTabletInput(pEvent.subtype == NSTabletPointEventSubtype);
   }
 }
@@ -437,7 +435,7 @@ inline int GetMouseOver(IGraphicsMac* pGraphics)
 - (IMouseInfo) getMouseLeft: (NSEvent*) pEvent
 {
   IMouseInfo info;
-  [self getMouseXY:pEvent x:&info.x y:&info.y];
+  [self getMouseXY:pEvent x:info.x y:info.y];
   int mods = (int) [pEvent modifierFlags];
   info.ms = IMouseMod(true, (mods & NSCommandKeyMask), (mods & NSShiftKeyMask), (mods & NSControlKeyMask), (mods & NSAlternateKeyMask));
 
@@ -447,7 +445,7 @@ inline int GetMouseOver(IGraphicsMac* pGraphics)
 - (IMouseInfo) getMouseRight: (NSEvent*) pEvent
 {
   IMouseInfo info;
-  [self getMouseXY:pEvent x:&info.x y:&info.y];
+  [self getMouseXY:pEvent x:info.x y:info.y];
   int mods = (int) [pEvent modifierFlags];
   info.ms = IMouseMod(false, true, (mods & NSShiftKeyMask), (mods & NSControlKeyMask), (mods & NSAlternateKeyMask));
 
@@ -479,11 +477,12 @@ inline int GetMouseOver(IGraphicsMac* pGraphics)
 
 - (void) mouseDragged: (NSEvent*) pEvent
 {
+  // Cache previous values before retrieving the new mouse position (which will update them)
+  float prevX = mPrevX;
+  float prevY = mPrevY;
   IMouseInfo info = [self getMouseLeft:pEvent];
-  float dX = [pEvent deltaX];
-  float dY = [pEvent deltaY];
   if (mGraphics && !mTextFieldView)
-    mGraphics->OnMouseDrag(info.x, info.y, dX, dY, info.ms);
+    mGraphics->OnMouseDrag(info.x, info.y, info.x - prevX, info.y - prevY, info.ms);
 }
 
 - (void) rightMouseDown: (NSEvent*) pEvent
@@ -502,11 +501,13 @@ inline int GetMouseOver(IGraphicsMac* pGraphics)
 
 - (void) rightMouseDragged: (NSEvent*) pEvent
 {
+  // Cache previous values before retrieving the new mouse position (which will update them)
+  float prevX = mPrevX;
+  float prevY = mPrevY;
   IMouseInfo info = [self getMouseRight:pEvent];
-  float dX = [pEvent deltaX];
-  float dY = [pEvent deltaY];
+
   if (mGraphics && !mTextFieldView)
-    mGraphics->OnMouseDrag(info.x, info.y, dX, dY, info.ms);
+    mGraphics->OnMouseDrag(info.x, info.y, info.x - prevX, info.y - prevY, info.ms);
 }
 
 - (void) mouseMoved: (NSEvent*) pEvent
@@ -518,49 +519,30 @@ inline int GetMouseOver(IGraphicsMac* pGraphics)
 
 - (void)keyDown: (NSEvent *)pEvent
 {
-#ifdef IGRAPHICS_SWELL
   int flag, code = SWELL_MacKeyToWindowsKey(pEvent, &flag);
 
-  bool handle = mGraphics->OnKeyDown(mPrevX, mPrevY, code);
+  NSString *s = [pEvent charactersIgnoringModifiers];
+
+  unichar c = 0;
+  
+  if ([s length] == 1)
+    c = [s characterAtIndex:0];
+  
+  if(!static_cast<bool>(flag & FVIRTKEY))
+  {
+    code = 0;
+  }
+  
+  IKeyPress keyPress {static_cast<char>(c), code, static_cast<bool>(flag & FSHIFT),
+                                                  static_cast<bool>(flag & FCONTROL),
+                                                  static_cast<bool>(flag & FALT)};
+  
+  bool handle = mGraphics->OnKeyDown(mPrevX, mPrevY, keyPress);
   
   if (!handle)
   {
     [[self nextResponder] keyDown:pEvent];
   }
-#else
-  NSString *s = [pEvent charactersIgnoringModifiers];
-
-  if ([s length] == 1)
-  {
-    unsigned short k = [pEvent keyCode];
-    unichar c = [s characterAtIndex:0];
-
-    bool handle = true;
-    int key = KEY_NONE;
-
-    if (k == 48) key = KEY_TAB;
-    else if (k == 49) key = KEY_SPACE;
-    else if (k == 126) key = KEY_UPARROW;
-    else if (k == 125) key = KEY_DOWNARROW;
-    else if (k == 123) key = KEY_LEFTARROW;
-    else if (k == 124) key = KEY_RIGHTARROW;
-    else if (c >= '0' && c <= '9') key = KEY_DIGIT_0+c-'0';
-    else if (c >= 'A' && c <= 'Z') key = KEY_ALPHA_A+c-'A';
-    else if (c >= 'a' && c <= 'z') key = KEY_ALPHA_A+c-'a';
-    else handle = false;
-
-    if (handle)
-    {
-      // can't use getMouseXY because its a key event
-      handle = mGraphics->OnKeyDown(mPrevX, mPrevY, key);
-    }
-    
-    if (!handle)
-    {
-      [[self nextResponder] keyDown:pEvent];
-    }
-  }
-#endif
 }
 
 - (void) scrollWheel: (NSEvent*) pEvent
@@ -576,16 +558,24 @@ inline int GetMouseOver(IGraphicsMac* pGraphics)
 {
   NSCursor* pCursor = nullptr;
   
+  bool helpCurrent = false;
+  bool helpRequested = false;
+    
   switch (cursor)
   {
     case ECursor::ARROW: pCursor = [NSCursor arrowCursor]; break;
     case ECursor::IBEAM: pCursor = [NSCursor IBeamCursor]; break;
     case ECursor::WAIT:
-      if ([NSCursor respondsToSelector:@selector(_waitCursor)])
-        pCursor = [NSCursor performSelector:@selector(_waitCursor)];
+      if ([NSCursor respondsToSelector:@selector(busyButClickableCursor)])
+        pCursor = [NSCursor performSelector:@selector(busyButClickableCursor)];
       break;
     case ECursor::CROSS: pCursor = [NSCursor crosshairCursor]; break;
-    case ECursor::UPARROW: pCursor = [NSCursor resizeUpCursor]; break;
+    case ECursor::UPARROW:
+      if ([NSCursor respondsToSelector:@selector(_windowResizeNorthCursor)])
+          pCursor = [NSCursor performSelector:@selector(_windowResizeNorthCursor)];
+      else
+          pCursor = [NSCursor resizeUpCursor];
+      break;
     case ECursor::SIZENWSE:
       if ([NSCursor respondsToSelector:@selector(_windowResizeNorthWestSouthEastCursor)])
         pCursor = [NSCursor performSelector:@selector(_windowResizeNorthWestSouthEastCursor)];
@@ -594,25 +584,49 @@ inline int GetMouseOver(IGraphicsMac* pGraphics)
       if ([NSCursor respondsToSelector:@selector(_windowResizeNorthEastSouthWestCursor)])
         pCursor = [NSCursor performSelector:@selector(_windowResizeNorthEastSouthWestCursor)];
       break;
-    case ECursor::SIZEWE: pCursor = [NSCursor resizeLeftRightCursor]; break;
+    case ECursor::SIZEWE:
+      if ([NSCursor respondsToSelector:@selector(_windowResizeEastWestCursor)])
+        pCursor = [NSCursor performSelector:@selector(_windowResizeEastWestCursor)];
+      else
+        pCursor = [NSCursor resizeLeftRightCursor];
+      break;
     case ECursor::SIZENS:
       if ([NSCursor respondsToSelector:@selector(_windowResizeNorthSouthCursor)])
         pCursor = [NSCursor performSelector:@selector(_windowResizeNorthSouthCursor)];
+      else
+        pCursor = [NSCursor resizeUpDownCursor];
       break;
     case ECursor::SIZEALL:
       if ([NSCursor respondsToSelector:@selector(_moveCursor)])
         pCursor = [NSCursor performSelector:@selector(_moveCursor)];
       break;
-    case ECursor::INO: pCursor = [NSCursor performSelector:@selector(operationNotAllowedCursor)]; break;
-    case ECursor::HAND: pCursor = [NSCursor pointingHandCursor]; break;
+    case ECursor::INO: pCursor = [NSCursor operationNotAllowedCursor]; break;
+    case ECursor::HAND: pCursor = [NSCursor openHandCursor]; break;
+    case ECursor::APPSTARTING:
+      if ([NSCursor respondsToSelector:@selector(busyButClickableCursor)])
+        pCursor = [NSCursor performSelector:@selector(busyButClickableCursor)];
+       break;
     case ECursor::HELP:
       if ([NSCursor respondsToSelector:@selector(_helpCursor)])
         pCursor = [NSCursor performSelector:@selector(_helpCursor)];
+      helpRequested = true;
       break;
     default: pCursor = [NSCursor arrowCursor]; break;
   }
-  
-  if(!pCursor)
+
+  if ([NSCursor respondsToSelector:@selector(helpCursorShown)])
+    helpCurrent = [NSCursor performSelector:@selector(helpCursorShown)];
+    
+  if (helpCurrent && !helpRequested)
+  {
+    // N.B. - suppress warnings for this call only
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wobjc-method-access"
+    [NSCursor _setHelpCursor : false];
+#pragma clang diagnostic pop
+  }
+    
+  if (!pCursor)
     pCursor = [NSCursor arrowCursor];
 
   [pCursor set];

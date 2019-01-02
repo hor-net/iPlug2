@@ -32,7 +32,9 @@ typedef IPlugVST3Controller VST3_API_BASE;
 #include "IControls.h"
 #include "IGraphicsLiveEdit.h"
 #include "IFPSDisplayControl.h"
+#include "ICornerResizerControl.h"
 #include "IPopupMenuControl.h"
+#include "ITextEntryControl.h"
 
 struct SVGHolder
 {
@@ -101,7 +103,7 @@ void IGraphics::Resize(int w, int h, float scale)
   if (mCornerResizer)
     mCornerResizer->OnRescale();
 
-  GetDelegate()->EditorStateNotify();
+  GetDelegate()->EditorPropertiesModified();
   PlatformResize();
   ForAllControls(&IControl::OnResize);
   SetAllControlsDirty();
@@ -140,6 +142,9 @@ void IGraphics::RemoveAllControls()
 
   if (mPopupControl)
     DELETE_NULL(mPopupControl);
+  
+  if (mTextEntryControl)
+    DELETE_NULL(mTextEntryControl);
   
   if (mCornerResizer)
     DELETE_NULL(mCornerResizer);
@@ -189,34 +194,60 @@ int IGraphics::AttachControl(IControl* pControl, int controlTag, const char* gro
 
 void IGraphics::AttachCornerResizer(EUIResizerMode sizeMode, bool layoutOnResize)
 {
-  AttachCornerResizer(new ICornerResizerBase(mDelegate, GetBounds(), 20), sizeMode, layoutOnResize);
+  AttachCornerResizer(new ICornerResizerControl(mDelegate, GetBounds(), 20), sizeMode, layoutOnResize);
 }
 
-void IGraphics::AttachCornerResizer(ICornerResizerBase* pControl, EUIResizerMode sizeMode, bool layoutOnResize)
+void IGraphics::AttachCornerResizer(ICornerResizerControl* pControl, EUIResizerMode sizeMode, bool layoutOnResize)
 {
-  mCornerResizer = pControl;
-  mGUISizeMode = sizeMode;
-  mLayoutOnResize = layoutOnResize;
-  mCornerResizer->SetGraphics(this);
+  assert(mCornerResizer == nullptr); // only want one corner resizer
+
+  if (mCornerResizer == nullptr)
+  {
+    mCornerResizer = pControl;
+    mGUISizeMode = sizeMode;
+    mLayoutOnResize = layoutOnResize;
+    mCornerResizer->SetGraphics(this);
+  }
+  else
+  {
+    delete pControl;
+  }
 }
 
 void IGraphics::AttachPopupMenuControl(const IText& text, const IRECT& bounds)
 {
-  mPopupControl = new IPopupMenuControl(mDelegate, kNoParameter, text, IRECT(), bounds);
-  mPopupControl->SetGraphics(this);
+  if (mPopupControl == nullptr)
+  {
+    mPopupControl = new IPopupMenuControl(mDelegate, kNoParameter, text, IRECT(), bounds);
+    mPopupControl->SetGraphics(this);
+  }
+}
+
+void IGraphics::AttachTextEntryControl()
+{
+  if(mTextEntryControl == nullptr)
+  {
+    mTextEntryControl = new ITextEntryControl(mDelegate);
+    mTextEntryControl->SetGraphics(this);
+  }
 }
 
 void IGraphics::ShowFPSDisplay(bool enable)
 {
   if(enable)
   {
-    if(!mPerfDisplay)
+    if (mPerfDisplay == nullptr)
+    {
       mPerfDisplay = new IFPSDisplayControl(mDelegate, GetBounds().GetPadded(-10).GetFromTLHC(200, 50));
       mPerfDisplay->SetGraphics(this);
+    }
   }
   else
-    DELETE_NULL(mPerfDisplay);
-  
+  {
+    if(mPerfDisplay)
+      DELETE_NULL(mPerfDisplay);
+  }
+
   SetAllControlsDirty();
 }
 
@@ -302,13 +333,16 @@ void IGraphics::ForAllControlsFunc(std::function<void(IControl& control)> func)
   if (mPerfDisplay)
     func(*mPerfDisplay);
   
-  if (mCornerResizer)
-    func(*mCornerResizer);
-  
 #if !defined(NDEBUG)
   if (mLiveEdit)
     func(*mLiveEdit);
 #endif
+  
+  if (mCornerResizer)
+    func(*mCornerResizer);
+  
+  if (mTextEntryControl)
+    func(*mTextEntryControl);
   
   if (mPopupControl)
     func(*mPopupControl);
@@ -720,7 +754,7 @@ void IGraphics::OnMouseDown(float x, float y, const IMouseMod& mod)
     if (mod.R && paramIdx >= 0)
     {
       ReleaseMouseCapture();
-      PopupHostContextMenuForParam(mMouseCapture, paramIdx, x, y);
+      PopupHostContextMenuForParam(pControl, paramIdx, x, y);
       return;
     }
     #endif
@@ -775,10 +809,12 @@ bool IGraphics::OnMouseOver(float x, float y, const IMouseMod& mod)
   {
     if (mMouseOver)
       mMouseOver->OnMouseOut();
-    if (pControl)
-      pControl->OnMouseOver(x, y, mod);
+
     mMouseOver = pControl;
   }
+
+  if (mMouseOver)
+    mMouseOver->OnMouseOver(x, y, mod);
 
   return pControl;
 }
@@ -837,17 +873,22 @@ void IGraphics::OnMouseWheel(float x, float y, const IMouseMod& mod, float d)
   if (pControl) pControl->OnMouseWheel(x, y, mod, d);
 }
 
-bool IGraphics::OnKeyDown(float x, float y, int key)
+bool IGraphics::OnKeyDown(float x, float y, const IKeyPress& key)
 {
   Trace("IGraphics::OnKeyDown", __LINE__, "x:%0.2f, y:%0.2f, key:%i",
-        x, y, key);
+        x, y, key.Ascii);
+
+  bool handled = false;
 
   IControl* pControl = GetMouseControl(x, y, false);
-    
+  
   if (pControl && pControl != GetControl(0))
-    return pControl->OnKeyDown(x, y, key);
-  else
-    return mKeyHandlerFunc ? mKeyHandlerFunc(key) : false;
+    handled = pControl->OnKeyDown(x, y, key);
+
+  if(!handled)
+    handled = mKeyHandlerFunc ? mKeyHandlerFunc(key) : false;
+  
+  return handled;
 }
 
 void IGraphics::OnDrop(const char* str, float x, float y)
@@ -871,16 +912,27 @@ int IGraphics::GetMouseControlIdx(float x, float y, bool mouseOver)
     {
       IControl* pControl = GetControl(c);
 
-      if (!pControl->IsHidden() && !pControl->GetIgnoreMouse())
+#if _DEBUG
+      if(!mLiveEdit)
       {
-        if ((!pControl->IsGrayed() || (mouseOver ? pControl->GetMOWhenGrayed() : pControl->GetMEWhenGrayed())))
+#endif
+        if (!pControl->IsHidden() && !pControl->GetIgnoreMouse())
         {
-          if (pControl->IsHit(x, y))
+          if ((!pControl->IsGrayed() || (mouseOver ? pControl->GetMOWhenGrayed() : pControl->GetMEWhenGrayed())))
           {
-            return c;
+            if (pControl->IsHit(x, y))
+            {
+              return c;
+            }
           }
         }
+#if _DEBUG
       }
+      else if (pControl->IsHit(x, y))
+      {
+        return c;
+      }
+#endif
     }
   }
   
@@ -897,6 +949,9 @@ IControl* IGraphics::GetMouseControl(float x, float y, bool capture, bool mouseO
   
   if (!control && mPopupControl && mPopupControl->GetExpanded())
     control = mPopupControl;
+  
+  if (!control && mTextEntryControl && mTextEntryControl->EditInProgress())
+    control = mTextEntryControl;
   
 #if !defined(NDEBUG)
   if (mLiveEdit)
@@ -952,9 +1007,6 @@ void IGraphics::PopupHostContextMenuForParam(IControl* pControl, int paramIdx, f
   {
     pControl->CreateContextMenu(contextMenu);
 
-    if(!contextMenu.NItems())
-      return;
-
 #if defined VST3_API || defined VST3C_API
     VST3_API_BASE* pVST3 = dynamic_cast<VST3_API_BASE*>(&mDelegate);
 
@@ -984,14 +1036,19 @@ void IGraphics::PopupHostContextMenuForParam(IControl* pControl, int paramIdx, f
         else
           item.flags = 0;
 
-        pVST3ContextMenu->addItem(item, GetControl(controlIdx));
+        pVST3ContextMenu->addItem(item, pControl);
       }
 
+      x *= GetDrawScale();
+      y *= GetDrawScale();
       pVST3ContextMenu->popup((Steinberg::UCoord) x, (Steinberg::UCoord) y);
       pVST3ContextMenu->release();
     }
 
 #else
+    if(!contextMenu.NItems())
+      return;
+
     if(mPopupControl) // if we are not using platform popup menus, IPopupMenuControl will not block
     {
       CreatePopupMenu(contextMenu, x, y, pControl);
@@ -1035,7 +1092,9 @@ void IGraphics::OnResizeGesture(float x, float y)
 
 IBitmap IGraphics::GetScaledBitmap(IBitmap& src)
 {
-  return LoadBitmap(src.GetResourceName().Get(), src.N(), src.GetFramesAreHorizontal(), (GetScreenScale() == 1 && GetDrawScale() > 1.) ? 2 : 0);
+  //TODO: bug with # frames!
+//  return LoadBitmap(src.GetResourceName().Get(), src.N(), src.GetFramesAreHorizontal(), (GetScreenScale() == 1 && GetDrawScale() > 1.) ? 2 : 0 /* ??? */);
+  return LoadBitmap(src.GetResourceName().Get(), src.N(), src.GetFramesAreHorizontal(), GetScreenScale());
 }
 
 void IGraphics::EnableTooltips(bool enable)
@@ -1049,8 +1108,11 @@ void IGraphics::EnableLiveEdit(bool enable/*, const char* file, int gridsize*/)
 #if defined(_DEBUG)
   if(enable)
   {
-    mLiveEdit = new IGraphicsLiveEdit(mDelegate/*, file, gridsize*/);
-    mLiveEdit->SetGraphics(this);
+    if (mLiveEdit == nullptr)
+    {
+      mLiveEdit = new IGraphicsLiveEdit(mDelegate, mHandleMouseOver/*, file, gridsize*/);
+      mLiveEdit->SetGraphics(this);
+    }
   }
   else
   {
@@ -1065,43 +1127,47 @@ void IGraphics::EnableLiveEdit(bool enable/*, const char* file, int gridsize*/)
 #endif
 }
 
-#ifdef OS_WIN
-NSVGimage* LoadSVGFromWinResource(HINSTANCE hInst, const char* resid)
+ISVG IGraphics::LoadSVG(const char* fileName, const char* units, float dpi)
 {
-  HRSRC hResource = FindResource(hInst, resid, "SVG");
-  if (!hResource) return NULL;
-
-  DWORD imageSize = SizeofResource(hInst, hResource);
-  if (imageSize < 8) return NULL;
-
-  HGLOBAL res = LoadResource(hInst, hResource);
-  const void* pResourceData = LockResource(res);
-  if (!pResourceData) return NULL;
-
-  WDL_String svgStr {static_cast<const char*>(pResourceData) };
-
-  return nsvgParse(svgStr.Get(), "px", 72);
-}
-#endif
-
-ISVG IGraphics::LoadSVG(const char* name)
-{
-  WDL_String path;
-  bool resourceFound = OSFindResource(name, "svg", path);
-  assert(resourceFound == true);
-
-  SVGHolder* pHolder = s_SVGCache.Find(path.Get());
+  SVGHolder* pHolder = s_SVGCache.Find(fileName);
 
   if(!pHolder)
   {
-#ifdef OS_WIN
-    NSVGimage* pImage = LoadSVGFromWinResource((HINSTANCE) GetPlatformInstance(), path.Get());
-#else
-    NSVGimage* pImage = nsvgParseFromFile(path.Get(), "px", 72);
+    WDL_String path;
+    EResourceLocation resourceFound = OSFindResource(fileName, "svg", path);
+
+    if (resourceFound == EResourceLocation::kNotFound)
+      return ISVG(nullptr); // return invalid SVG
+
+    NSVGimage* pImage = nullptr;
+
+#ifdef OS_WIN    
+    if (resourceFound == EResourceLocation::kWinBinary)
+    {
+      int size = 0;
+      const void* pResData = LoadWinResource(path.Get(), "svg", size);
+
+      if (pResData)
+      {
+        WDL_String svgStr{ static_cast<const char*>(pResData) };
+
+        pImage = nsvgParse(svgStr.Get(), units, dpi);
+      }
+      else
+        return ISVG(nullptr); // return invalid SVG
+    }
 #endif
-    assert(pImage != nullptr);
+
+    if (resourceFound == EResourceLocation::kAbsolutePath)
+    {
+      pImage = nsvgParseFromFile(path.Get(), units, dpi);
+
+      if(!pImage)
+        return ISVG(nullptr); // return invalid SVG
+    }
 
     pHolder = new SVGHolder(pImage);
+    
     s_SVGCache.Add(pHolder, path.Get());
   }
 
@@ -1121,8 +1187,19 @@ IBitmap IGraphics::LoadBitmap(const char* name, int nStates, bool framesAreHoriz
     WDL_String fullPath;
     int sourceScale = 0;
     bool fromDisk = false;
+    
+    const char* ext = name + strlen(name) - 1;
+    while (ext >= name && *ext != '.') --ext;
+    ++ext;
+    
+    bool bitmapTypeSupported = BitmapExtSupported(ext);
+    
+    if(!bitmapTypeSupported)
+      return IBitmap(); // return invalid IBitmap
 
-    if (!SearchImageResource(name, "png", fullPath, targetScale, sourceScale))
+    EResourceLocation resourceLocation = SearchImageResource(name, ext, fullPath, targetScale, sourceScale);
+
+    if (resourceLocation == EResourceLocation::kNotFound)
     {
       // If no resource exists then search the cache for a suitable match
       pAPIBitmap = SearchBitmapInCache(name, targetScale, sourceScale);
@@ -1135,7 +1212,7 @@ IBitmap IGraphics::LoadBitmap(const char* name, int nStates, bool framesAreHoriz
 
       if (!pAPIBitmap)
       {
-        pAPIBitmap = LoadAPIBitmap(fullPath, sourceScale);
+        pAPIBitmap = LoadAPIBitmap(fullPath.Get(), sourceScale, resourceLocation, ext);
         fromDisk = true;
       }
     }
@@ -1193,7 +1270,7 @@ inline void IGraphics::SearchNextScale(int& sourceScale, int targetScale)
     sourceScale--;
 }
 
-bool IGraphics::SearchImageResource(const char* name, const char* type, WDL_String& result, int targetScale, int& sourceScale)
+EResourceLocation IGraphics::SearchImageResource(const char* name, const char* type, WDL_String& result, int targetScale, int& sourceScale)
 {
   // Search target scale, then descending
   for (sourceScale = targetScale ; sourceScale > 0; SearchNextScale(sourceScale, targetScale))
@@ -1206,12 +1283,14 @@ bool IGraphics::SearchImageResource(const char* name, const char* type, WDL_Stri
       WDL_String ext(fullName.get_fileext());
       fullName.SetFormatted((int) (strlen(name) + strlen("@2x")), "%s@%dx%s", baseName.Get(), sourceScale, ext.Get());
     }
-      
-    if (OSFindResource(fullName.Get(), type, result))
-      return true;
+
+    EResourceLocation found = OSFindResource(fullName.Get(), type, result);
+
+    if (found > EResourceLocation::kNotFound)
+      return found;
   }
 
-  return false;
+  return EResourceLocation::kNotFound;
 }
 
 APIBitmap* IGraphics::SearchBitmapInCache(const char* name, int targetScale, int& sourceScale)
@@ -1238,20 +1317,64 @@ void IGraphics::StyleAllVectorControls(bool drawFrame, bool drawShadow, bool emb
   }
 }
 
+void IGraphics::CreateTextEntry(IControl& control, const IText& text, const IRECT& bounds, const char* str)
+{
+  if (mTextEntryControl)
+  {
+    mTextEntryControl->CreateTextEntry(bounds, text, str);
+    return;
+  }
+  else
+    CreatePlatformTextEntry(control, text, bounds, str);
+}
+
+IPopupMenu* IGraphics::CreatePopupMenu(IPopupMenu& menu, const IRECT& bounds, IControl* pCaller)
+{
+  ReleaseMouseCapture();
+
+  if(mPopupControl) // if we are not using platform pop-up menus
+    return mPopupControl->CreatePopupMenu(menu, bounds, pCaller);
+  else
+    return CreatePlatformPopupMenu(menu, bounds, pCaller);
+}
+
 void IGraphics::StartLayer(const IRECT& r)
 {
   IRECT alignedBounds = r.GetPixelAligned(GetBackingPixelScale());
   const int w = static_cast<int>(std::round(alignedBounds.W()));
   const int h = static_cast<int>(std::round(alignedBounds.H()));
 
-  mLayers.push(new ILayer(CreateAPIBitmap(w, h), alignedBounds));
-  UpdateLayer();
-  PathTransformReset(true);
-  PathClipRegion(alignedBounds);
-  PathClear();
+  PushLayer(new ILayer(CreateAPIBitmap(w, h), alignedBounds), true);
+}
+
+void IGraphics::ResumeLayer(ILayerPtr& layer)
+{
+  ILayerPtr ownedLayer;
+    
+  ownedLayer.swap(layer);
+  ILayer* ownerlessLayer = ownedLayer.release();
+    
+  if (ownerlessLayer)
+  {
+    PushLayer(ownerlessLayer, true);
+  }
 }
 
 ILayerPtr IGraphics::EndLayer()
+{
+  return ILayerPtr(PopLayer(true));
+}
+
+void IGraphics::PushLayer(ILayer *layer, bool clearTransforms)
+{
+  mLayers.push(layer);
+  UpdateLayer();
+  PathTransformReset(clearTransforms);
+  PathClipRegion(layer->Bounds());
+  PathClear();
+}
+
+ILayer* IGraphics::PopLayer(bool clearTransforms)
 {
   ILayer* pLayer = nullptr;
   
@@ -1262,11 +1385,11 @@ ILayerPtr IGraphics::EndLayer()
   }
   
   UpdateLayer();
-  PathTransformReset(true);
+  PathTransformReset(clearTransforms);
   PathClipRegion();
   PathClear();
   
-  return ILayerPtr(pLayer);
+  return pLayer;
 }
 
 bool IGraphics::CheckLayer(const ILayerPtr& layer)
@@ -1293,4 +1416,89 @@ void IGraphics::DrawRotatedLayer(const ILayerPtr& layer, double angle)
   IRECT bounds = layer->Bounds();
   DrawRotatedBitmap(bitmap, bounds.MW(), bounds.MH(), angle);
   PathTransformRestore();
+}
+
+void GaussianBlurSwap(unsigned char *out, unsigned char *in, unsigned char *kernel, int width, int height, int outStride, int inStride, int kernelSize, unsigned long norm)
+{
+  for (int i = 0; i < height; i++, in += inStride)
+  {
+    for (int j = 0; j < kernelSize - 1; j++)
+    {
+      unsigned long accum = in[j * 4] * kernel[0];
+      for (int k = 1; k < j + 1; k++)
+        accum += kernel[k] * in[(j - k) * 4];
+      for (int k = 1; k < kernelSize; k++)
+        accum += kernel[k] * in[(j + k) * 4];
+      out[j * outStride + (i * 4)] = std::min(static_cast<unsigned long>(255), accum / norm);
+    }
+    for (int j = kernelSize - 1; j < (width - kernelSize) + 1; j++)
+    {
+      unsigned long accum = in[j * 4] * kernel[0];
+      for (int k = 1; k < kernelSize; k++)
+        accum += kernel[k] * (in[(j - k) * 4] + in[(j + k) * 4]);
+      out[j * outStride + (i * 4)] = std::min(static_cast<unsigned long>(255), accum / norm);
+    }
+    for (int j = (width - kernelSize) + 1; j < width; j++)
+    {
+      unsigned long accum = in[j * 4] * kernel[0];
+      for (int k = 1; k < kernelSize; k++)
+        accum += kernel[k] * in[(j - k) * 4];
+      for (int k = 1; k < width - j; k++)
+        accum += kernel[k] * in[(j + k) * 4];
+      out[j * outStride + (i * 4)] = std::min(static_cast<unsigned long>(255), accum / norm);
+    }
+  }
+}
+
+void IGraphics::ApplyLayerDropShadow(ILayerPtr& layer, const IShadow& shadow)
+{
+  RawBitmapData temp1;
+  RawBitmapData temp2;
+  RawBitmapData kernel;
+    
+  // Get bitmap in 32-bit form
+    
+  GetLayerBitmapData(layer, temp1);
+    
+  if (!temp1.GetSize())
+      return;
+  temp2.Resize(temp1.GetSize());
+    
+  // Form kernel (reference blurSize from zero (which will be no blur))
+  
+  bool flipped = FlippedBitmap();
+  double scale = layer->GetAPIBitmap()->GetScale() * layer->GetAPIBitmap()->GetDrawScale();
+  double blurSize = std::max(1.0, (shadow.mBlurSize * scale) + 1.0);
+  double blurConst = 4.5 / (blurSize * blurSize);
+  int iSize = ceil(blurSize);
+  int width = layer->GetAPIBitmap()->GetWidth();
+  int height = layer->GetAPIBitmap()->GetHeight();
+  int stride1 = temp1.GetSize() / width;
+  int stride2 = flipped ? -temp1.GetSize() / height : temp1.GetSize() / height;
+  int stride3 = flipped ? -stride2 : stride2;
+
+  kernel.Resize(iSize);
+        
+  for (int i = 0; i < iSize; i++)
+    kernel.Get()[i] = std::round(255.f * std::expf(-(i * i) * blurConst));
+  
+  // Kernel normalisation
+  
+  int normFactor = kernel.Get()[0];
+    
+  for (int i = 1; i < iSize; i++)
+    normFactor += kernel.Get()[i] + kernel.Get()[i];
+  
+  // Do blur
+  
+  unsigned char* asRows = temp1.Get() + AlphaChannel();
+  unsigned char* inRows = flipped ? asRows + stride3 * (height - 1) : asRows;
+  unsigned char* asCols = temp2.Get() + AlphaChannel();
+  
+  GaussianBlurSwap(asCols, inRows, kernel.Get(), width, height, stride1, stride2, iSize, normFactor);
+  GaussianBlurSwap(asRows, asCols, kernel.Get(), height, width, stride3, stride1, iSize, normFactor);
+  
+  // Apply alphas to the pattern and recombine/replace the image
+    
+  ApplyShadowMask(layer, temp1, shadow);
 }

@@ -52,8 +52,17 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpszCmdPa
     pAppHost->Init();
     pAppHost->TryToChangeAudio();
 
-    CreateDialog(gHINSTANCE, MAKEINTRESOURCE(IDD_DIALOG_MAIN), GetDesktopWindow(), MainDlgProc);
-    
+    HACCEL hAccel = LoadAccelerators(gHINSTANCE, MAKEINTRESOURCE(IDR_ACCELERATOR1));
+
+    CreateDialog(gHINSTANCE, MAKEINTRESOURCE(IDD_DIALOG_MAIN), GetDesktopWindow(), IPlugAPPHost::MainDlgProc);
+
+#ifndef _DEBUG
+    HMENU menu = GetMenu(gHWND);
+    RemoveMenu(menu, 1, MF_BYPOSITION);
+    DrawMenuBar(gHWND);
+#endif
+
+
     for(;;)
     {
       MSG msg= {0,};
@@ -92,9 +101,12 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpszCmdPa
       while (temphwnd = GetParent(temphwnd));
       
       if (hWndParent && IsDialogMessage(hWndParent,&msg)) continue;
-      
-      TranslateMessage(&msg);
-      DispatchMessage(&msg);
+
+      if (!TranslateAccelerator(gHWND, hAccel, &msg))
+      {
+        TranslateMessage(&msg);
+        DispatchMessage(&msg);
+      }
     }
     
     // in case gHWND didnt get destroyed -- this corresponds to SWELLAPP_DESTROY roughly
@@ -115,8 +127,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpszCmdPa
 #elif defined(OS_MAC)
 #import <Cocoa/Cocoa.h>
 #include "swell.h"
-extern WDL_DLGRET MainDlgProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lParam);
-
 HWND gHWND;
 extern HMENU SWELL_app_stocksysmenu;
 
@@ -215,10 +225,11 @@ INT_PTR SWELLAppMain(int msg, INT_PTR parm1, INT_PTR parm2)
 #else
       SetMenuItemModifier(menu, ID_LIVE_EDIT, MF_BYCOMMAND, 'E', FCONTROL);
       SetMenuItemModifier(menu, ID_SHOW_DRAWN, MF_BYCOMMAND, 'D', FCONTROL);
+      SetMenuItemModifier(menu, ID_SHOW_BOUNDS, MF_BYCOMMAND, 'B', FCONTROL);
       SetMenuItemModifier(menu, ID_SHOW_FPS, MF_BYCOMMAND, 'F', FCONTROL);
 #endif
 
-      HWND hwnd = CreateDialog(gHINST, MAKEINTRESOURCE(IDD_DIALOG_MAIN), NULL, MainDlgProc);
+      HWND hwnd = CreateDialog(gHINST, MAKEINTRESOURCE(IDD_DIALOG_MAIN), NULL, IPlugAPPHost::MainDlgProc);
 
       if (menu)
       {
@@ -237,8 +248,21 @@ INT_PTR SWELLAppMain(int msg, INT_PTR parm1, INT_PTR parm2)
       if (gHWND)
         DestroyWindow(gHWND);
       break;
-    case SWELLAPP_PROCESSMESSAGE: // can hook keyboard input here
-      // parm1 = (MSG*), should we want it -- look in swell.h to see what the return values refer to
+    case SWELLAPP_PROCESSMESSAGE:
+      MSG* pMSG = (MSG*) parm1;
+      NSView* pContentView = (NSView*) pMSG->hwnd;
+      NSEvent* pEvent = (NSEvent*) parm2;
+      int etype = [pEvent type];
+
+      if(etype == NSKeyDown)
+      {
+        int flag, code = SWELL_MacKeyToWindowsKey(pEvent, &flag);
+        
+        if (!(flag&~FVIRTKEY))
+          if(code == VK_RETURN || code == VK_ESCAPE)
+            [pContentView keyDown: pEvent];
+      }
+      
       break;
   }
   return 0;

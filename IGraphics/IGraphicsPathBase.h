@@ -9,6 +9,12 @@
 */
 
 #pragma once
+
+/**
+ * @file
+ * @copydoc IGraphicsPathBase
+ */
+
 #include <algorithm>
 #include <stack>
 
@@ -16,6 +22,7 @@
 
 #include "nanosvg.h"
 
+/** A base class to share implementations of IGraphics.h functionality across different path based graphics backends. */
 class IGraphicsPathBase : public IGraphics
 {
 public:
@@ -414,8 +421,8 @@ public:
   {
     PathTransformSave();
     PathTransformTranslate(bounds.L, bounds.T);
-    IRECT newBounds(0., 0., bitmap.W(), bitmap.H());
-    PathTransformScale(bounds.W() / bitmap.W(), bounds.H() / bitmap.H());
+    IRECT newBounds(0., 0., static_cast<float>(bitmap.W()), static_cast<float>(bitmap.H()));
+    PathTransformScale(bounds.W() / static_cast<float>(bitmap.W()), bounds.H() / static_cast<float>(bitmap.H()));
     DrawBitmap(bitmap, newBounds, 0, 0, pBlend);
     PathTransformRestore();
   }

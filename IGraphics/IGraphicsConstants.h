@@ -77,6 +77,8 @@ enum EBlendType
   kBlendClobber,  // Copy completely over whatever is already there.
   kBlendAdd,
   kBlendColorDodge,
+  kBlendUnder,
+  kBlendSourceIn,
   // etc
 };
 
@@ -90,6 +92,13 @@ enum EDirection
 {
   kVertical = 0,
   kHorizontal = 1
+};
+
+enum EResourceLocation
+{
+  kNotFound = 0,
+  kAbsolutePath,
+  kWinBinary
 };
 
 enum EVColor
