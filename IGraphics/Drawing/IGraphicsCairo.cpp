@@ -15,6 +15,8 @@
 #include "IGraphicsCairo.h"
 #include "ITextEntryControl.h"
 
+//#define IMG_TEST
+
 struct CairoFont
 {
   CairoFont(cairo_font_face_t* font, double EMRatio) : mFont(font), mEMRatio(EMRatio) {}
@@ -109,18 +111,18 @@ inline cairo_operator_t CairoBlendMode(const IBlend* pBlend)
   }
   switch (pBlend->mMethod)
   {
-    case kBlendDefault:         // fall through
-    case kBlendClobber:         // fall through
-    case kBlendSourceOver:      return CAIRO_OPERATOR_OVER;
-    case kBlendSourceIn:        return CAIRO_OPERATOR_IN;
-    case kBlendSourceOut:       return CAIRO_OPERATOR_OUT;
-    case kBlendSourceAtop:      return CAIRO_OPERATOR_ATOP;
-    case kBlendDestOver:        return CAIRO_OPERATOR_DEST_OVER;
-    case kBlendDestIn:          return CAIRO_OPERATOR_DEST_IN;
-    case kBlendDestOut:         return CAIRO_OPERATOR_DEST_OUT;
-    case kBlendDestAtop:        return CAIRO_OPERATOR_DEST_ATOP;
-    case kBlendAdd:             return CAIRO_OPERATOR_ADD;
-    case kBlendXOR:             return CAIRO_OPERATOR_XOR;
+    case EBlend::Default:         // fall through
+    case EBlend::Clobber:         // fall through
+    case EBlend::SourceOver:      return CAIRO_OPERATOR_OVER;
+    case EBlend::SourceIn:        return CAIRO_OPERATOR_IN;
+    case EBlend::SourceOut:       return CAIRO_OPERATOR_OUT;
+    case EBlend::SourceAtop:      return CAIRO_OPERATOR_ATOP;
+    case EBlend::DestOver:        return CAIRO_OPERATOR_DEST_OVER;
+    case EBlend::DestIn:          return CAIRO_OPERATOR_DEST_IN;
+    case EBlend::DestOut:         return CAIRO_OPERATOR_DEST_OUT;
+    case EBlend::DestAtop:        return CAIRO_OPERATOR_DEST_ATOP;
+    case EBlend::Add:             return CAIRO_OPERATOR_ADD;
+    case EBlend::XOR:             return CAIRO_OPERATOR_XOR;
   }
 }
 
@@ -252,7 +254,7 @@ void IGraphicsCairo::ApplyShadowMask(ILayerPtr& layer, RawBitmapData& mask, cons
       cairo_fill(pContext);
     }
     
-    IBlend blend(kBlendDefault, shadow.mOpacity);
+    IBlend blend(EBlend::Default, shadow.mOpacity);
     cairo_translate(pContext, -layer->Bounds().L, -layer->Bounds().T);
     SetCairoSourcePattern(pContext, shadow.mPattern, &blend);
     cairo_identity_matrix(pContext);
@@ -286,12 +288,12 @@ void IGraphicsCairo::PathClose()
   cairo_close_path(mContext);
 }
 
-void IGraphicsCairo::PathArc(float cx, float cy, float r, float aMin, float aMax, EWinding winding)
+void IGraphicsCairo::PathArc(float cx, float cy, float r, float a1, float a2, EWinding winding)
 {
-  if (winding == kWindingCW)
-    cairo_arc(mContext, cx, cy, r, DegToRad(aMin - 90.f), DegToRad(aMax - 90.f));
+  if (winding == EWinding::CW)
+    cairo_arc(mContext, cx, cy, r, DegToRad(a1 - 90.f), DegToRad(a2 - 90.f));
   else
-    cairo_arc_negative(mContext, cx, cy, r, DegToRad(aMin - 90.f), DegToRad(aMax - 90.f));
+    cairo_arc_negative(mContext, cx, cy, r, DegToRad(a1 - 90.f), DegToRad(a2 - 90.f));
 }
 
 void IGraphicsCairo::PathMoveTo(float x, float y)
@@ -304,9 +306,21 @@ void IGraphicsCairo::PathLineTo(float x, float y)
   cairo_line_to(mContext, x, y);
 }
 
-void IGraphicsCairo::PathCurveTo(float x1, float y1, float x2, float y2, float x3, float y3)
+void IGraphicsCairo::PathCubicBezierTo(float c1x, float c1y, float c2x, float c2y, float x2, float y2)
 {
-  cairo_curve_to(mContext, x1, y1, x2, y2, x3, y3);
+  cairo_curve_to(mContext, c1x, c1y, c2x, c2y, x2, y2);
+}
+
+void IGraphicsCairo::PathQuadraticBezierTo(float cx, float cy, float x2, float y2)
+{
+  double x0, y0;
+  cairo_get_current_point(mContext, &x0, &y0);
+  cairo_curve_to(mContext,
+                  2.0 / 3.0 * cx + 1.0 / 3.0 * x0,
+                  2.0 / 3.0 * cy + 1.0 / 3.0 * y0,
+                  2.0 / 3.0 * cx + 1.0 / 3.0 * x2,
+                  2.0 / 3.0 * cy + 1.0 / 3.0 * y2,
+                  x2, y2);
 }
 
 void IGraphicsCairo::PathStroke(const IPattern& pattern, float thickness, const IStrokeOptions& options, const IBlend* pBlend)
@@ -315,16 +329,16 @@ void IGraphicsCairo::PathStroke(const IPattern& pattern, float thickness, const 
   
   switch (options.mCapOption)
   {
-    case kCapButt:   cairo_set_line_cap(mContext, CAIRO_LINE_CAP_BUTT);     break;
-    case kCapRound:  cairo_set_line_cap(mContext, CAIRO_LINE_CAP_ROUND);    break;
-    case kCapSquare: cairo_set_line_cap(mContext, CAIRO_LINE_CAP_SQUARE);   break;
+    case ELineCap::Butt:   cairo_set_line_cap(mContext, CAIRO_LINE_CAP_BUTT);     break;
+    case ELineCap::Round:  cairo_set_line_cap(mContext, CAIRO_LINE_CAP_ROUND);    break;
+    case ELineCap::Square: cairo_set_line_cap(mContext, CAIRO_LINE_CAP_SQUARE);   break;
   }
   
   switch (options.mJoinOption)
   {
-    case kJoinMiter:   cairo_set_line_join(mContext, CAIRO_LINE_JOIN_MITER);   break;
-    case kJoinRound:   cairo_set_line_join(mContext, CAIRO_LINE_JOIN_ROUND);   break;
-    case kJoinBevel:   cairo_set_line_join(mContext, CAIRO_LINE_JOIN_BEVEL);   break;
+    case ELineJoin::Miter:   cairo_set_line_join(mContext, CAIRO_LINE_JOIN_MITER);   break;
+    case ELineJoin::Round:   cairo_set_line_join(mContext, CAIRO_LINE_JOIN_ROUND);   break;
+    case ELineJoin::Bevel:   cairo_set_line_join(mContext, CAIRO_LINE_JOIN_BEVEL);   break;
   }
   
   cairo_set_miter_limit(mContext, options.mMiterLimit);
@@ -344,7 +358,7 @@ void IGraphicsCairo::PathStroke(const IPattern& pattern, float thickness, const 
 
 void IGraphicsCairo::PathFill(const IPattern& pattern, const IFillOptions& options, const IBlend* pBlend) 
 {
-  cairo_set_fill_rule(mContext, options.mFillRule == kFillEvenOdd ? CAIRO_FILL_RULE_EVEN_ODD : CAIRO_FILL_RULE_WINDING);
+  cairo_set_fill_rule(mContext, options.mFillRule == EFillRule::EvenOdd ? CAIRO_FILL_RULE_EVEN_ODD : CAIRO_FILL_RULE_WINDING);
   SetCairoSourcePattern(mContext, pattern, pBlend);
   if (options.mPreserve)
     cairo_fill_preserve(mContext);
@@ -358,31 +372,31 @@ void IGraphicsCairo::SetCairoSourcePattern(cairo_t* context, const IPattern& pat
   
   switch (pattern.mType)
   {
-    case kSolidPattern:
+    case EPatternType::Solid:
     {
       const IColor &color = pattern.GetStop(0).mColor;
       cairo_set_source_rgba(context, color.R / 255.0, color.G / 255.0, color.B / 255.0, (BlendWeight(pBlend) * color.A) / 255.0);
     }
     break;
       
-    case kLinearPattern:
-    case kRadialPattern:
+    case EPatternType::Linear:
+    case EPatternType::Radial:
     {
       cairo_pattern_t* cairoPattern;
       cairo_matrix_t matrix;
       const IMatrix& m = pattern.mTransform;
       
-      if (pattern.mType == kLinearPattern)
+      if (pattern.mType == EPatternType::Linear)
         cairoPattern = cairo_pattern_create_linear(0.0, 0.0, 0.0, 1.0);
       else
         cairoPattern = cairo_pattern_create_radial(0.0, 0.0, 0.0, 0.0, 0.0, 1.0);
       
       switch (pattern.mExtend)
       {
-        case kExtendNone:      cairo_pattern_set_extend(cairoPattern, CAIRO_EXTEND_NONE);      break;
-        case kExtendPad:       cairo_pattern_set_extend(cairoPattern, CAIRO_EXTEND_PAD);       break;
-        case kExtendReflect:   cairo_pattern_set_extend(cairoPattern, CAIRO_EXTEND_REFLECT);   break;
-        case kExtendRepeat:    cairo_pattern_set_extend(cairoPattern, CAIRO_EXTEND_REPEAT);    break;
+        case EPatternExtend::None:      cairo_pattern_set_extend(cairoPattern, CAIRO_EXTEND_NONE);      break;
+        case EPatternExtend::Pad:       cairo_pattern_set_extend(cairoPattern, CAIRO_EXTEND_PAD);       break;
+        case EPatternExtend::Reflect:   cairo_pattern_set_extend(cairoPattern, CAIRO_EXTEND_REFLECT);   break;
+        case EPatternExtend::Repeat:    cairo_pattern_set_extend(cairoPattern, CAIRO_EXTEND_REPEAT);    break;
       }
       
       for (int i = 0; i < pattern.NStops(); i++)
@@ -466,16 +480,16 @@ void IGraphicsCairo::PrepareAndMeasureText(const IText& text, const char* str, I
     
   switch (text.mAlign)
   {
-    case IText::kAlignNear:     x = r.L;                          break;
-    case IText::kAlignCenter:   x = r.MW() - (textWidth / 2.0);   break;
-    case IText::kAlignFar:      x = r.R - textWidth;              break;
+    case EAlign::Near:     x = r.L;                          break;
+    case EAlign::Center:   x = r.MW() - (textWidth / 2.0);   break;
+    case EAlign::Far:      x = r.R - textWidth;              break;
   }
   
   switch (text.mVAlign)
   {
-    case IText::kVAlignTop:      y = r.T + ascender;                            break;
-    case IText::kVAlignMiddle:   y = r.MH() - descender + (textHeight / 2.0);   break;
-    case IText::kVAlignBottom:   y = r.B - descender;                           break;
+    case EVAlign::Top:      y = r.T + ascender;                            break;
+    case EVAlign::Middle:   y = r.MH() - descender + (textHeight / 2.0);   break;
+    case EVAlign::Bottom:   y = r.B - descender;                           break;
   }
   
   r = IRECT((float) x, (float) (y - ascender), (float) (x + textWidth), (float) (y + textHeight - ascender));
@@ -508,7 +522,7 @@ void IGraphicsCairo::DoDrawText(const IText& text, const char* str, const IRECT&
 
 #ifdef OS_WIN
   IMatrix m = GetTransformMatrix();
-  useNativeTransforms = !text.mOrientation && !m.mXY && !m.mYX;
+  useNativeTransforms = !text.mAngle && !m.mXY && !m.mYX;
 #endif 
 
   PrepareAndMeasureText(text, str, measured, x, y, pGlyphs, numGlyphs);
@@ -578,8 +592,13 @@ void IGraphicsCairo::SetPlatformContext(void* pContext)
   else if(!mSurface)
   {
 #ifdef OS_MAC
+#ifndef IMG_TEST
     mSurface = cairo_quartz_surface_create_for_cg_context(CGContextRef(pContext), WindowWidth(), WindowHeight());
     cairo_surface_set_device_scale(mSurface, GetDrawScale(), GetDrawScale());
+#else
+    mSurface = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, WindowWidth() * GetScreenScale(), WindowHeight()  * GetScreenScale());
+    cairo_surface_set_device_scale(mSurface, GetBackingPixelScale(), GetBackingPixelScale());
+#endif
 #elif defined OS_WIN
     mSurface = cairo_win32_surface_create_with_ddb((HDC) pContext, CAIRO_FORMAT_ARGB32, WindowWidth() * GetScreenScale(), WindowHeight() * GetScreenScale());
     cairo_surface_set_device_scale(mSurface, GetBackingPixelScale(), GetBackingPixelScale());
@@ -603,6 +622,54 @@ void IGraphicsCairo::SetPlatformContext(void* pContext)
 void IGraphicsCairo::EndFrame()
 {
 #ifdef OS_MAC
+#ifdef IMG_TEST
+  cairo_surface_flush(mSurface);
+  
+    CGImageRef img = NULL;
+    CGRect r = CGRectMake(0, 0, WindowWidth() * GetScreenScale(), WindowHeight()  * GetScreenScale());
+    static CGColorSpaceRef mColorSpace = nullptr;
+    if (!mColorSpace)
+    {
+        int v = GetSystemVersion();
+        
+        if (v >= 0x1070)
+        {
+#ifdef MAC_OS_X_VERSION_10_11
+            mColorSpace = CGDisplayCopyColorSpace(CGMainDisplayID());
+#else
+            CMProfileRef systemMonitorProfile = NULL;
+            CMError getProfileErr = CMGetSystemProfile(&systemMonitorProfile);
+            if(noErr == getProfileErr)
+            {
+                mColorSpace = CGColorSpaceCreateWithPlatformColorSpace(systemMonitorProfile);
+                CMCloseProfile(systemMonitorProfile);
+            }
+#endif
+        }
+        if (!mColorSpace)
+            mColorSpace = CGColorSpaceCreateDeviceRGB();
+    }
+    
+    int sw = cairo_image_surface_get_stride(mSurface);
+    int h = cairo_image_surface_get_height(mSurface);
+    int w = cairo_image_surface_get_width(mSurface);
+    
+    unsigned char*p = cairo_image_surface_get_data(mSurface);
+    CGDataProviderRef provider = CGDataProviderCreateWithData(NULL, p, sw * h, NULL);
+    img = CGImageCreate(w, h, 8, 32, sw,(CGColorSpaceRef) mColorSpace, kCGImageAlphaNoneSkipFirst | kCGBitmapByteOrder32Host, provider, NULL, false, kCGRenderingIntentDefault);
+    CGDataProviderRelease(provider);
+    
+    if (img)
+    {
+        CGContext* pCGContext = (CGContext*) GetPlatformContext();
+        CGContextSaveGState(pCGContext);
+        CGContextTranslateCTM(pCGContext, 0.0, WindowHeight());
+        CGContextScaleCTM(pCGContext, 1./GetScreenScale(), -1./GetScreenScale());
+        CGContextDrawImage(pCGContext, r, img);
+        CGContextRestoreGState(pCGContext);
+        CGImageRelease(img);
+    }
+#endif
 #elif defined OS_WIN
   cairo_surface_flush(mSurface);
   PAINTSTRUCT ps;

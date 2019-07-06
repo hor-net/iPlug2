@@ -421,7 +421,7 @@ void IGraphicsMac::PromptForFile(WDL_String& fileName, WDL_String& path, EFileAc
   if (CStringHasContents(ext))
     pFileTypes = [[NSString stringWithUTF8String:ext] componentsSeparatedByString: @" "];
 
-  if (action == kFileSave)
+  if (action == EFileAction::Save)
   {
     NSSavePanel* pSavePanel = [NSSavePanel savePanel];
 
@@ -509,9 +509,11 @@ void IGraphicsMac::PromptForDirectory(WDL_String& dir)
   }
 }
 
-bool IGraphicsMac::PromptForColor(IColor& color, const char* str)
+bool IGraphicsMac::PromptForColor(IColor& color, const char* str, IColorPickerHandlerFunc func)
 {
-  //TODO:
+  if (mView)
+    return [(IGRAPHICS_VIEW*) mView promptForColor:color : func];
+
   return false;
 }
 
@@ -621,6 +623,10 @@ void IGraphicsMac::CreatePlatformImGui()
   #include "IGraphicsCairo.cpp"
 #elif defined IGRAPHICS_NANOVG
   #include "IGraphicsNanoVG.cpp"
-#else
+#elif defined IGRAPHICS_SKIA
+  #include "IGraphicsSkia.cpp"
+#elif defined IGRAPHICS_LICE
   #include "IGraphicsLice.cpp"
+#else
+  #error Either NO_IGRAPHICS or one and only one choice of graphics library must be defined!
 #endif

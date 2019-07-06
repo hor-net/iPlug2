@@ -1197,11 +1197,15 @@ IPopupMenu* IGraphicsWin::CreatePlatformPopupMenu(IPopupMenu& menu, const IRECT&
             {
               long idx = 0;
               offsetIdx = 0;
-              IPopupMenu* resultMenu = GetItemMenu(res, idx, offsetIdx, menu);
-              if (resultMenu)
+              IPopupMenu* pReturnMenu = GetItemMenu(res, idx, offsetIdx, menu);
+              if (pReturnMenu)
               {
-                result = resultMenu;
+                result = pReturnMenu;
                 result->SetChosenItemIdx(idx);
+                
+                //synchronous
+                if(pReturnMenu && pReturnMenu->GetFunction())
+                  pReturnMenu->ExecFunction();
               }
             }
           }
@@ -1228,9 +1232,9 @@ void IGraphicsWin::CreatePlatformTextEntry(int paramIdx, const IText& text, cons
 
   switch ( text.mAlign )
   {
-    case IText::kAlignNear:   editStyle = ES_LEFT;   break;
-    case IText::kAlignFar:    editStyle = ES_RIGHT;  break;
-    case IText::kAlignCenter:
+    case EAlign::Near:   editStyle = ES_LEFT;   break;
+    case EAlign::Far:    editStyle = ES_RIGHT;  break;
+    case EAlign::Center:
     default:                  editStyle = ES_CENTER; break;
   }
 
@@ -1373,12 +1377,12 @@ void IGraphicsWin::PromptForFile(WDL_String& fileName, WDL_String& path, EFileAc
     
   switch (action)
   {
-    case kFileSave:
+    case EFileAction::Save:
       ofn.Flags |= OFN_OVERWRITEPROMPT;
       rc = GetSaveFileNameW(&ofn);
       break;
             
-    case kFileOpen:
+    case EFileAction::Open:
       default:
       ofn.Flags |= OFN_FILEMUSTEXIST;
       rc = GetOpenFileNameW(&ofn);
@@ -1454,17 +1458,20 @@ UINT_PTR CALLBACK CCHookProc(HWND hdlg, UINT uiMsg, WPARAM wParam, LPARAM lParam
     {
       char* str = (char*) cc->lCustData;
       SetWindowText(hdlg, str);
+      UINT uiSetRGB;
+      uiSetRGB = RegisterWindowMessage(SETRGBSTRING);
+      SendMessage(hdlg, uiSetRGB, 0, (LPARAM) cc->rgbResult);
     }
   }
   return 0;
 }
 
-bool IGraphicsWin::PromptForColor(IColor& color, const char* prompt)
+bool IGraphicsWin::PromptForColor(IColor& color, const char* prompt, IColorPickerHandlerFunc func)
 {
+  ReleaseMouseCapture();
+
   if (!mPlugWnd)
-  {
     return false;
-  }
 
   const COLORREF w = RGB(255, 255, 255);
   static COLORREF customColorStorage[16] = { w, w, w, w, w, w, w, w, w, w, w, w, w, w, w, w };
@@ -1484,6 +1491,10 @@ bool IGraphicsWin::PromptForColor(IColor& color, const char* prompt)
     color.R = GetRValue(cc.rgbResult);
     color.G = GetGValue(cc.rgbResult);
     color.B = GetBValue(cc.rgbResult);
+    
+    if(func)
+      func(color);
+    
     return true;
   }
   return false;
@@ -1723,8 +1734,8 @@ PlatformFontPtr IGraphicsWin::LoadPlatformFont(const char* fontID, const char* f
 
 PlatformFontPtr IGraphicsWin::LoadPlatformFont(const char* fontID, const char* fontName, ETextStyle style)
 {
-  int weight = style == kTextStyleBold ? FW_BOLD : FW_REGULAR;
-  bool italic = style == kTextStyleItalic;
+  int weight = style == ETextStyle::Bold ? FW_BOLD : FW_REGULAR;
+  bool italic = style == ETextStyle::Italic;
   bool underline = false;
   DWORD quality = DEFAULT_QUALITY;
 
@@ -1750,6 +1761,11 @@ void IGraphicsWin::CachePlatformFont(const char* fontID, const PlatformFontPtr& 
   #include "IGraphicsCairo.cpp"
 #elif defined IGRAPHICS_LICE
   #include "IGraphicsLice.cpp"
+#elif defined IGRAPHICS_SKIA
+  #include "IGraphicsSkia.cpp"
+  #ifdef IGRAPHICS_GL
+    #include "glad.c"
+  #endif
 #elif defined IGRAPHICS_NANOVG
   #include "IGraphicsNanoVG.cpp"
 #ifdef IGRAPHICS_FREETYPE
@@ -1758,6 +1774,6 @@ void IGraphicsWin::CachePlatformFont(const char* fontID, const PlatformFontPtr& 
   #include "nanovg.c"
   #include "glad.c"
 #else
-  #include "IGraphicsCairo.cpp"
+  #error
 #endif
 #endif
