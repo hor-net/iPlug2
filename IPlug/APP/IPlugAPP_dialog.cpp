@@ -527,11 +527,15 @@ WDL_DLGRET IPlugAPPHost::MainDlgProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPA
   {
     case WM_INITDIALOG:
       gHWND = hwndDlg;
-
+      
       if(!pAppHost->OpenWindow(gHWND))
         DBGMSG("couldn't attach gui\n");
-
+      
+#if APP_HAS_TRANSPORT_BAR
+      ClientResize(hwndDlg, PLUG_WIDTH, PLUG_HEIGHT+APP_TRANSPORT_BAR_HEIGHT);
+#else
       ClientResize(hwndDlg, PLUG_WIDTH, PLUG_HEIGHT);
+#endif
 
       ShowWindow(hwndDlg,SW_SHOW);
       return 1;
