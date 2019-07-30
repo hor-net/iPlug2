@@ -609,14 +609,14 @@ extern StaticStorage<CoreTextFontDescriptor> sFontDescriptorCache;
   
   if (mGraphics->IsDirty(mDirtyRects))
   {
+    mGraphics->SetAllControlsClean();
+      
 #ifdef IGRAPHICS_GL
     [self.layer setNeedsDisplay];
 #else
     [self render];
 #endif
   }
-  
-  mGraphics->SetAllControlsClean();
 }
 
 - (void) getMouseXY: (NSEvent*) pEvent x: (float&) pX y: (float&) pY
@@ -1020,7 +1020,7 @@ static void MakeCursorFromName(NSCursor*& cursor, const char *name)
   }
 
   CoreTextFontDescriptor* CTFontDescriptor = CoreTextHelpers::GetCTFontDescriptor(text, sFontDescriptorCache);
-  NSFontDescriptor* fontDescriptor = (NSFontDescriptor*) CTFontDescriptor->mDescriptor;
+  NSFontDescriptor* fontDescriptor = (NSFontDescriptor*) CTFontDescriptor->GetDescriptor();
   NSFont* font = [NSFont fontWithDescriptor: fontDescriptor size: text.mSize * 0.75];
   [mTextFieldView setFont: font];
   

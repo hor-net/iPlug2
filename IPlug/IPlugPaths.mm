@@ -18,7 +18,9 @@
 #include <string>
 #include <map>
 
+#ifdef IGRAPHICS_METAL
 extern std::map<std::string, void*> gTextureMap;
+#endif
 
 #ifdef OS_MAC
 void HostPath(WDL_String& path, const char* bundleID)
@@ -257,6 +259,11 @@ void INIPath(WDL_String& path, const char* pluginName)
   path.Set("");
 }
 
+bool IsAuv3AppExtension()
+{
+  return ([[[NSBundle mainBundle] bundleIdentifier] containsString:@"AUv3"]);
+}
+
 bool GetResourcePathFromBundle(const char* fileName, const char* searchExt, WDL_String& fullPath, const char* bundleID)
 {
   @autoreleasepool
@@ -277,7 +284,7 @@ bool GetResourcePathFromBundle(const char* fileName, const char* searchExt, WDL_
     if(isAppExtension)
       pBundle = [NSBundle bundleWithIdentifier:[NSString stringWithCString:bundleID encoding:NSUTF8StringEncoding]];
     
-    NSString* pFile = [[[NSString stringWithCString:fileName encoding:NSUTF8StringEncoding] lastPathComponent] stringByDeletingPathExtension];
+    NSString* pFile = [[NSString stringWithCString:fileName encoding:NSUTF8StringEncoding] stringByDeletingPathExtension];
     NSString* pExt = [NSString stringWithCString:searchExt encoding:NSUTF8StringEncoding];
     
     if (isCorrectType && pBundle && pFile)
@@ -307,6 +314,7 @@ EResourceLocation LocateResource(const char* name, const char* type, WDL_String&
 {
   if(CStringHasContents(name))
   {
+#ifdef IGRAPHICS_METAL
     auto itr = gTextureMap.find(name);
     
     if (itr != gTextureMap.end())
@@ -314,6 +322,7 @@ EResourceLocation LocateResource(const char* name, const char* type, WDL_String&
       result.Set(name);
       return EResourceLocation::kPreloadedTexture;
     }
+#endif
     
     if(GetResourcePathFromBundle(name, type, result, bundleID))
       return EResourceLocation::kAbsolutePath;

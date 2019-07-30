@@ -875,7 +875,10 @@ public:
   IGraphics(IGEditorDelegate& dlg, int w, int h, int fps = 0, float scale = 1.);
 
   virtual ~IGraphics();
-
+    
+  IGraphics(const IGraphics&) = delete;
+  IGraphics& operator=(const IGraphics&) = delete;
+    
   /** Called by the platform IGraphics class XXXXX /todo and when moving to a new screen with different DPI
    * @param scale The scale of the display, typically 2 on a macOS retina screen */
   void SetScreenScale(int scale);
@@ -1047,9 +1050,17 @@ public:
    * @param keyHandlerFunc /todo */
   void SetKeyHandlerFunc(IKeyHandlerFunc func) { mKeyHandlerFunc = func; }
 
+  /** A helper to set the IGraphics KeyHandlerFunc in order to make an instrument playable via QWERTY keys
+   * @param func A function to do something when a MIDI message is triggered */
+  void SetQwertyMidiKeyHandlerFunc(std::function<void(const IMidiMsg& msg)> func = nullptr);
+  
   /** /todo */
   void AttachImGui(std::function<void(IGraphics*)> drawFunc, std::function<void()> setupFunc = nullptr);
-  
+
+  /** Returns a scaling factor for resizing parent windows via the host/plugin API
+   * @return A scaling factor for resizing parent windows */
+  virtual int GetPlatformWindowScale() const { return 1; }
+
 private:
   /* /todo */
   virtual void CreatePlatformImGui() {}
@@ -1390,6 +1401,9 @@ protected:
   virtual bool LoadAPIFont(const char* fontID, const PlatformFontPtr& font) = 0;
 
   /** /todo */
+  virtual bool AssetsLoaded() { return true; }
+    
+  /** /todo */
   virtual int AlphaChannel() const = 0;
 
   /** /todo */
@@ -1513,8 +1527,9 @@ protected:
 
   friend class IGraphicsLiveEdit;
   friend class ICornerResizerControl;
+
   friend class ITextEntryControl;
-  
+
   std::stack<ILayer*> mLayers;
   
 #ifdef IGRAPHICS_IMGUI
