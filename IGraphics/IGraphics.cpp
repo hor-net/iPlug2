@@ -2373,7 +2373,7 @@ void IGraphics::DrawGrid(const IColor& color, const IRECT& bounds, float gridSiz
   PathStroke(color, thickness, IStrokeOptions(), pBlend);
 }
 
-void IGraphics::DrawData(const IColor& color, const IRECT& bounds, float* normYPoints, int nPoints, float* normXPoints, const IBlend* pBlend, float thickness)
+void IGraphics::DrawData(const IColor& color, const IRECT& bounds, float* normYPoints, int nPoints, float* normXPoints, const IBlend* pBlend, float thickness, bool fill)
 {
   if (nPoints == 0)
     return;
