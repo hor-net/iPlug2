@@ -82,8 +82,12 @@ void* IWebView::OpenWebView(void* pParent, float x, float y, float w, float h, f
 #ifdef _DEBUG
   [preferences setValue:@YES forKey:@"developerExtrasEnabled"];
 #endif
+  [preferences setValue:@TRUE forKey:@"allowFileAccessFromFileURLs"];
+#ifdef OS_MAC
   [preferences setValue:@YES forKey:@"universalAccessFromFileURLsAllowed"];
   [preferences setValue:@NO forKey:@"webSecurityEnabled"];
+  [preferences setValue:@YES forKey:@"canvasUsesAcceleratedDrawing"];
+#endif
   webConfig.preferences = preferences;
   
   // this script adds a function IPlugSendMsg that is used to call the platform webview messaging function in JS
@@ -95,9 +99,15 @@ void* IWebView::OpenWebView(void* pParent, float x, float y, float w, float h, f
                                                  injectionTime:WKUserScriptInjectionTimeAtDocumentEnd forMainFrameOnly:YES];
   [controller addUserScript:script2];
   
+#ifndef _DEBUG
+  // this blocks the right click
+  WKUserScript* script3 = [[WKUserScript alloc] initWithSource:@"document.addEventListener('contextmenu', event => event.preventDefault());document.addEventListener('contextmenu', event => event.preventDefault());"
+                                                 injectionTime:WKUserScriptInjectionTimeAtDocumentEnd forMainFrameOnly:YES];
+  [controller addUserScript:script3];
+  
+#endif
   
   WKWebView* webView = [[WKWebView alloc] initWithFrame: MAKERECT(x, y, w, h) configuration:webConfig];
-  
 
 #if defined OS_IOS
   if (!mOpaque)
@@ -142,6 +152,7 @@ void IWebView::CloseWebView()
   mWebConfig = nullptr;
   mWKWebView = nullptr;
   mScriptHandler = nullptr;
+  
 }
 
 void IWebView::LoadHTML(const char* html)
@@ -164,10 +175,14 @@ void IWebView::LoadFile(const char* fileName, const char* bundleID)
   WKWebView* webView = (__bridge WKWebView*) mWKWebView;
 
   WDL_String fullPath;
-  WDL_String fileNameWeb("web/");
-  fileNameWeb.Append(fileName);
-
-  GetResourcePathFromBundle(fileNameWeb.Get(), fileNameWeb.get_fileext() + 1 /* remove . */, fullPath, bundleID);
+  if(strcmp(&fileName[0],"/") == 0) {
+    fullPath.Set(fileName);
+  } else {
+    WDL_String fileNameWeb("web/");
+    fileNameWeb.Append(fileName);
+    GetResourcePathFromBundle(fileNameWeb.Get(), fileNameWeb.get_fileext() + 1 /* remove . */, fullPath, bundleID);
+  }
+  
   
   NSString* pPath = [NSString stringWithUTF8String:fullPath.Get()];
 
