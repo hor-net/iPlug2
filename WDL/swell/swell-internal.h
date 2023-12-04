@@ -112,7 +112,7 @@ struct HTREEITEM__;
 #define SWELL_PopupMenuRecv __SWELL_PREFIX_CLASSNAME(_trackpopupmenurecv)
 
 #define SWELL_TimerFuncTarget __SWELL_PREFIX_CLASSNAME(_tft)
-
+#define SWELL_MetalNotificationHandler __SWELL_PREFIX_CLASSNAME(_mnfh)
 
 #define SWELL_Menu __SWELL_PREFIX_CLASSNAME(_menu)
 
@@ -419,11 +419,9 @@ typedef struct WindowPropRec
   NSRect m_metal_lastframe;
 
   id m_metal_texture; // id<MTLTexture> -- owned if in full pipeline mode, otherwise reference to m_metal_drawable
-  id m_metal_pipelineState; // id<MTLRenderPipelineState> -- only used in full pipeline mode
-  id m_metal_commandQueue; // id<MTLCommandQueue> -- only used in full pipeline mode
   id m_metal_drawable; // id<CAMetalDrawable> -- only used in normal mode
   id m_metal_device; // id<MTLDevice> -- set to last-used-device
-  DWORD m_metal_device_lastchkt;
+  int m_metal_devicelist_updcnt;
 
 }
 - (id)initChild:(SWELL_DialogResourceIndex *)resstate Parent:(NSView *)parent dlgProc:(DLGPROC)dlgproc Param:(LPARAM)par;
@@ -769,7 +767,9 @@ SWELL_IMPLEMENT_GETOSXVERSION int SWELL_GetOSXVersion()
   {
     if (NSAppKitVersionNumber >= 1266.0)
     {
-      if (NSAppKitVersionNumber >= 2100.0)
+      if (NSAppKitVersionNumber >= 2299.0)
+        v = 0x1300;
+      else if (NSAppKitVersionNumber >= 2100.0)
         v = 0x1200;
       else if (NSAppKitVersionNumber >= 2022.0)
         v = 0x1100;

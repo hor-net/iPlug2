@@ -37,6 +37,8 @@
 BEGIN_IPLUG_NAMESPACE
 BEGIN_IGRAPHICS_NAMESPACE
 
+class IContainerBase;
+
 /** The lowest level base class of an IGraphics control. A control is anything on the GUI 
 *  @ingroup BaseControls */
 class IControl
@@ -140,6 +142,9 @@ public:
 
   /** Implement to do something when something was drag 'n dropped onto this control */
   virtual void OnDrop(const char* str) {};
+
+  /** Implement to handle multiple items drag 'n dropped onto this control */
+  virtual void OnDropMultiple(const std::vector<const char*>& paths) { OnDrop(paths[0]); }
 
   /** Implement to do something when graphics is scaled globally (e.g. moves to different DPI screen) */
   virtual void OnRescale() {}
@@ -452,6 +457,11 @@ public:
     OnRescale();
   }
   
+  /** @return A pointer to the parent container, if the control is a sub control */
+  IContainerBase* GetParent() const { return mParent; }
+  
+  void SetParent(IContainerBase* pParent) { mParent = pParent; }
+  
   /** @return A pointer to the IGraphics context that owns this control */ 
   IGraphics* GetUI() { return mGraphics; }
     
@@ -524,7 +534,7 @@ protected:
         func(v, args...);
     }
   }
-    
+  
   IRECT mRECT;
   IRECT mTargetRECT;
   
@@ -567,6 +577,7 @@ protected:
 #endif
   
 private:
+  IContainerBase* mParent = nullptr;
   IGEditorDelegate* mDelegate = nullptr;
   IGraphics* mGraphics = nullptr;
   IActionFunction mActionFunc = nullptr;
@@ -585,6 +596,122 @@ private:
  * \addtogroup BaseControls
  * @{
  */
+
+/** IContainerBase allows a control to nest sub controls and it clips the drawing of those subcontrols
+ * Inheritors can add child controls by overriding OnAttached() and calling AddChildControl(), or passing in an AttachFunc lambda to the construtor.
+ * Child controls should not have been added elsewhere
+ * OnResized() should also be overriden if the control bounds will change (can also be specified in a ResizeFunc lambda) */
+class IContainerBase : public IControl
+{
+public:
+  using AttachFunc = std::function<void(IContainerBase* pContainer, const IRECT& bounds)>;
+  using ResizeFunc = std::function<void(IContainerBase* pContainer, const IRECT& bounds)>;
+  
+  IContainerBase(const IRECT& bounds, int paramIdx = kNoParameter, IActionFunction actionFunc = nullptr)
+  : IControl(bounds, paramIdx, actionFunc)
+  {}
+  
+  IContainerBase(const IRECT& bounds, const std::initializer_list<int>& params, IActionFunction actionFunc = nullptr)
+  : IControl(bounds, params, actionFunc)
+  {}
+  
+  IContainerBase(const IRECT& bounds, IActionFunction actionFunc)
+  : IControl(bounds, actionFunc)
+  {}
+  
+  IContainerBase(const IRECT& bounds, AttachFunc attachFunc, ResizeFunc resizeFunc)
+  : IControl(bounds)
+  , mAttachFunc(attachFunc)
+  , mResizeFunc(resizeFunc)
+  {
+    mIgnoreMouse = true;
+  }
+  
+  void SetAttachFunc(AttachFunc attachFunc)
+  {
+    mAttachFunc = attachFunc;
+  }
+  
+  void SetResizeFunc(ResizeFunc resizeFunc)
+  {
+    mResizeFunc = resizeFunc;
+  }
+  
+  virtual void Draw(IGraphics& g) override
+  {
+    /* NO-OP */
+  }
+  
+  virtual ~IContainerBase()
+  {
+    mChildren.Empty(false);
+  }
+  
+  virtual void OnAttached() override
+  {
+    if (mAttachFunc)
+      mAttachFunc(this, mRECT);
+    
+    OnResize();
+  }
+  
+  virtual void OnResize() override
+  {
+    if (mResizeFunc && mChildren.GetSize())
+      mResizeFunc(this, mRECT);
+  }
+  
+  void SetDisabled(bool disable) override
+  {
+    ForAllChildrenFunc([disable](int childIdx, IControl* pChild) {
+      pChild->SetDisabled(disable);
+    });
+
+    IControl::SetDisabled(disable);
+  }
+
+  void Hide(bool hide) override
+  {
+    ForAllChildrenFunc([hide](int childIdx, IControl* pChild) {
+      pChild->Hide(hide);
+    });
+    
+    IControl::Hide(hide);
+  }
+  
+  IControl* AddChildControl(IControl* pControl, int ctrlTag = kNoTag, const char* group = "")
+  {
+    pControl->SetParent(this);
+    return mChildren.Add(GetUI()->AttachControl(pControl, ctrlTag, group));
+  }
+  
+  void RemoveChildControl(IControl* pControl)
+  {
+    pControl->SetParent(nullptr);
+    mChildren.DeletePtr(pControl, false);
+    GetUI()->RemoveControl(pControl);
+  }
+  
+  IControl* GetChild(int idx)
+  {
+    return mChildren.Get(idx);
+  }
+  
+  int NChildren() const { return mChildren.GetSize(); }
+  
+  void ForAllChildrenFunc(std::function<void(int childIdx, IControl* pControl)> func)
+  {
+    for (int i=0; i<mChildren.GetSize(); i++)
+    {
+      func(i, mChildren.Get(i));
+    }
+  }
+  
+protected:
+  AttachFunc mAttachFunc = nullptr;
+  ResizeFunc mResizeFunc = nullptr;
+  WDL_PtrList<IControl> mChildren;
+};
 
 /** A base interface to be combined with IControl for bitmap-based controls "IBControls", managing an IBitmap */
 class IBitmapBase
@@ -649,6 +776,9 @@ public:
     mControl = pControl;
     mLabelStr.Set(label);
   }
+  
+  /** Implement if extra changes are required in response to style changing */
+  virtual void OnStyleChanged() { /* NO-OP */ }
 
   /** Set one of the IVColors that style the IVControl
    * @param colorIdx The index of the color to set
@@ -672,21 +802,22 @@ public:
     return mStyle.colorSpec.GetColor(color);
   }
   
-  void SetLabelStr(const char* label) { mLabelStr.Set(label); mControl->SetDirty(false); }
-  void SetValueStr(const char* value) { mValueStr.Set(value); mControl->SetDirty(false); }
-  void SetWidgetFrac(float frac) { mStyle.widgetFrac = Clip(frac, 0.f, 1.f);  mControl->OnResize(); mControl->SetDirty(false); }
-  void SetAngle(float angle) { mStyle.angle = Clip(angle, 0.f, 360.f);  mControl->SetDirty(false); }
-  void SetShowLabel(bool show) { mStyle.showLabel = show;  mControl->OnResize(); mControl->SetDirty(false); }
-  void SetShowValue(bool show) { mStyle.showValue = show;  mControl->OnResize(); mControl->SetDirty(false); }
-  void SetRoundness(float roundness) { mStyle.roundness = Clip(roundness, 0.f, 1.f); mControl->SetDirty(false); }
-  void SetDrawFrame(bool draw) { mStyle.drawFrame = draw; mControl->SetDirty(false); }
-  void SetDrawShadows(bool draw) { mStyle.drawShadows = draw; mControl->SetDirty(false); }
-  void SetEmboss(bool draw) { mStyle.emboss = draw; mControl->SetDirty(false); }
-  void SetShadowOffset(float offset) { mStyle.shadowOffset = offset; mControl->SetDirty(false); }
-  void SetFrameThickness(float thickness) { mStyle.frameThickness = thickness; mControl->SetDirty(false); }
-  void SetSplashRadius(float radius) { mSplashRadius = radius * mMaxSplashRadius; }
-  void SetSplashPoint(float x, float y) { mSplashPoint.x = x; mSplashPoint.y = y; }
-  void SetShape(EVShape shape) { mShape = shape; mControl->SetDirty(false); }
+  void SetLabelStr(const char* label) { mLabelStr.Set(label); mControl->SetDirty(false); OnStyleChanged(); }
+  const char* GetLabelStr() const { return mLabelStr.Get(); }
+  void SetValueStr(const char* value) { mValueStr.Set(value); mControl->SetDirty(false); OnStyleChanged(); }
+  void SetWidgetFrac(float frac) { mStyle.widgetFrac = Clip(frac, 0.f, 1.f);  mControl->OnResize(); mControl->SetDirty(false); OnStyleChanged(); }
+  void SetAngle(float angle) { mStyle.angle = Clip(angle, 0.f, 360.f);  mControl->SetDirty(false); OnStyleChanged(); }
+  void SetShowLabel(bool show) { mStyle.showLabel = show;  mControl->OnResize(); mControl->SetDirty(false); OnStyleChanged(); }
+  void SetShowValue(bool show) { mStyle.showValue = show;  mControl->OnResize(); mControl->SetDirty(false); OnStyleChanged(); }
+  void SetRoundness(float roundness) { mStyle.roundness = Clip(roundness, 0.f, 1.f); mControl->SetDirty(false); OnStyleChanged(); }
+  void SetDrawFrame(bool draw) { mStyle.drawFrame = draw; mControl->SetDirty(false); OnStyleChanged(); }
+  void SetDrawShadows(bool draw) { mStyle.drawShadows = draw; mControl->SetDirty(false); OnStyleChanged(); }
+  void SetEmboss(bool draw) { mStyle.emboss = draw; mControl->SetDirty(false); OnStyleChanged(); }
+  void SetShadowOffset(float offset) { mStyle.shadowOffset = offset; mControl->SetDirty(false); OnStyleChanged(); }
+  void SetFrameThickness(float thickness) { mStyle.frameThickness = thickness; mControl->SetDirty(false); OnStyleChanged(); }
+  void SetSplashRadius(float radius) { mSplashRadius = radius * mMaxSplashRadius; OnStyleChanged(); }
+  void SetSplashPoint(float x, float y) { mSplashPoint.x = x; mSplashPoint.y = y; OnStyleChanged(); }
+  void SetShape(EVShape shape) { mShape = shape; mControl->SetDirty(false); OnStyleChanged(); }
 
   /** Set the Style of this IVControl
    * @param style */
@@ -694,6 +825,7 @@ public:
   {
     mStyle = style;
     SetColors(style.colorSpec);
+    OnStyleChanged();
   }
 
   /** Get the style of this IVControl
@@ -705,7 +837,7 @@ public:
    * @return IRECT The adjusted bounds */
   IRECT GetAdjustedHandleBounds(IRECT handleBounds) const
   {
-    if(mStyle.drawFrame)
+    if (mStyle.drawFrame)
       handleBounds.Pad(- 0.5f * mStyle.frameThickness);
     
     if (mStyle.drawShadows)
@@ -719,11 +851,15 @@ public:
    * @return float The radius */ 
   float GetRoundedCornerRadius(const IRECT& bounds) const
   {
-    if(bounds.W() < bounds.H())
+    if (bounds.W() < bounds.H())
       return mStyle.roundness * (bounds.W() / 2.f);
     else
       return mStyle.roundness * (bounds.H() / 2.f);
   }
+  
+  IRECT GetWidgetBounds() const { return mWidgetBounds; }
+  IRECT GetLabelBounds() const { return mLabelBounds; }
+  IRECT GetValueBounds() const { return mValueBounds; }
   
   /** Draw a splash effect when a widget handle is clicked (via SplashClickAnimationFunc)
    * @param g The graphics context
@@ -869,10 +1005,10 @@ public:
       }
     }
     
-    if(pressed && mControl->GetAnimationFunction())
+    if (pressed && mControl->GetAnimationFunction())
       DrawSplash(g, handleBounds);
     
-    if(mStyle.drawFrame)
+    if (mStyle.drawFrame)
       g.DrawEllipse(GetColor(kFR), handleBounds, &blend, mStyle.frameThickness);
   }
   
@@ -923,8 +1059,8 @@ public:
     else
     {
       //outer shadow
-      //if (mStyle.drawShadows)
-      //  g.FillRoundRect(GetColor(kSH), shadowBounds, tlr, trr, blr, brr, &blend);
+      if (mStyle.drawShadows)
+        g.FillRoundRect(GetColor(kSH), shadowBounds, tlr, trr, blr, brr, &blend);
 
       // Embossed style unpressed
       if (mStyle.emboss)
@@ -952,10 +1088,10 @@ public:
       }
     }
     
-    if(pressed && mControl->GetAnimationFunction())
+    if (pressed && mControl->GetAnimationFunction())
       DrawSplash(g, handleBounds);
     
-    if(mStyle.drawFrame)
+    if (mStyle.drawFrame)
       g.DrawRoundRect(GetColor(kFR), handleBounds, tlr, trr, blr, brr, &blend, mStyle.frameThickness);
     
     return handleBounds;
@@ -1031,18 +1167,30 @@ public:
       {
         IRECT textRect;
         mControl->GetUI()->MeasureText(mStyle.labelText, mLabelStr.Get(), textRect);
-        if(mStyle.labelText.mAlign == EAlign::Center)
-          mLabelBounds = parent.GetFromTop(textRect.H()).GetCentredInside(textRect.W(), textRect.H());
-        if(mStyle.labelText.mAlign == EAlign::Near)
-          mLabelBounds = parent.GetFromTop(textRect.H()).GetFromLeft(textRect.W());
-        if(mStyle.labelText.mAlign == EAlign::Far)
-          mLabelBounds = parent.GetFromTop(textRect.H()).GetFromRight(textRect.W());
+
+        mLabelBounds = parent.GetFromTop(textRect.H()).GetCentredInside(textRect.W(), textRect.H());
       }
       else
         mLabelBounds = IRECT();
       
-      if(mLabelBounds.H())
-        clickableArea = parent.GetReducedFromTop(mLabelBounds.H());
+      if (!mLabelBounds.Empty())
+      {
+        switch (mStyle.labelOrientation)
+        {
+          case EOrientation::North:
+            clickableArea = parent.GetReducedFromTop(mLabelBounds.H());
+            break;
+          case EOrientation::East:
+            clickableArea = parent.GetReducedFromRight(mLabelBounds.W());
+            break;
+          case EOrientation::South:
+            clickableArea = parent.GetReducedFromBottom(mLabelBounds.H());
+            break;
+          case EOrientation::West:
+            clickableArea = parent.GetReducedFromLeft(mLabelBounds.W());
+            break;
+        }
+      }
     }
     
     if (mStyle.showValue && !mValueInWidget)
@@ -1733,39 +1881,61 @@ protected:
   bool mMouseDown = false;
 };
 
-/** An abstract IControl base class that you can inherit from in order to make a control that pops up a menu to browse files */
-class IDirBrowseControlBase : public IControl
+/** An abstract IControl base class that you can inherit from in order to make a control that pops up a menu to browse files
+ * Optionally with a specific extension. Add paths which will appear as subfolders at the root level menu.
+ * If only one path is added there will be no submenu. When you call SetupMenu() the added paths are scanned and any
+ * matching files in those paths are added to the menu.
+ */
+class IDirBrowseControlBase : public IContainerBase
 {
 public:
   /** Creates an IDirBrowseControlBase
    * @param bounds The control's bounds
    * @param extension The file extenstion to browse for, e.g excluding the dot e.g. "txt"
-   * @param showFileExtension Should the menu show the file extension */
-  IDirBrowseControlBase(const IRECT& bounds, const char* extension, bool showFileExtensions = true)
-  : IControl(bounds)
+   * @param showFileExtension Should the menu show the file extension
+   * @param scanRecursively Should the paths be scanned recursively, creating submenus
+   * @param showEmptySubmenus If scanRecursively, should empty folders be shown in the menu */
+  IDirBrowseControlBase(const IRECT& bounds, const char* extension, bool showFileExtensions = true, bool scanRecursively = true, bool showEmptySubmenus = false)
+  : IContainerBase(bounds)
+  , mExtension(extension)
   , mShowFileExtensions(showFileExtensions)
+  , mScanRecursively(scanRecursively)
+  , mShowEmptySubmenus(showEmptySubmenus)
   {
-    mExtension.Set(extension);
   }
 
   virtual ~IDirBrowseControlBase();
 
-  int NItems();
+  int NItems() const;
 
-  void AddPath(const char* path, const char* label);
+  /** Used to add a path to scan for files.
+   * @param path CString with the full path to the folder to scan
+   * @param displayText CString to name the path in the top level menu */
+  void AddPath(const char* path, const char* displayText);
+  
+  /** Clear the menu */
+  void ClearPathList();
 
+  /** Call after adding one or more paths, to populate the menu */
   void SetupMenu();
-
-//  void GetSelectedItemLabel(WDL_String& label);
-//  void GetSelectedItemPath(WDL_String& path);
+  
+  /** Set the selected file based on a file path. Does nothing if the file has not been added */
+  void SetSelectedFile(const char* filePath);
+  
+  /** Get the full path to the file if something has been selected in the menu */
+  void GetSelectedFile(WDL_String& path) const;
+  
+  /** Check the currently selected menu item. Does nothing if mSelectedIndex == -1 */
+  void CheckSelectedItem();
 
 private:
   void ScanDirectory(const char* path, IPopupMenu& menuToAddTo);
   void CollectSortedItems(IPopupMenu* pMenu);
   
 protected:
-  bool mShowEmptySubmenus = false;
-  bool mShowFileExtensions = true;
+  const bool mScanRecursively;
+  const bool mShowFileExtensions;
+  const bool mShowEmptySubmenus;
   int mSelectedIndex = -1;
   IPopupMenu* mSelectedMenu = nullptr;
   IPopupMenu mMainMenu;
@@ -1786,19 +1956,21 @@ protected:
  */
 
 /** A basic control to fill a rectangle with a color or gradient */
-class IPanelControl : public IControl
+class IPanelControl : public IContainerBase
 {
 public:
-  IPanelControl(const IRECT& bounds, const IColor& color, bool drawFrame = false)
-  : IControl(bounds, kNoParameter)
+  IPanelControl(const IRECT& bounds, const IColor& color, bool drawFrame = false,
+                AttachFunc attachFunc = nullptr, ResizeFunc resizeFunc = nullptr)
+  : IContainerBase(bounds, attachFunc, resizeFunc)
   , mPattern(color)
   , mDrawFrame(drawFrame)
   {
     mIgnoreMouse = true;
   }
   
-  IPanelControl(const IRECT& bounds, const IPattern& pattern, bool drawFrame = false)
-  : IControl(bounds, kNoParameter)
+  IPanelControl(const IRECT& bounds, const IPattern& pattern, bool drawFrame = false,
+                AttachFunc attachFunc = nullptr, ResizeFunc resizeFunc = nullptr)
+  : IContainerBase(bounds, attachFunc, resizeFunc)
   , mPattern(pattern)
   , mDrawFrame(drawFrame)
   {
@@ -1808,10 +1980,10 @@ public:
   void Draw(IGraphics& g) override
   {
     g.PathRect(mRECT);
-    g.PathFill(mPattern);
+    g.PathFill(mPattern, IFillOptions(), &mBlend);
   
-    if(mDrawFrame)
-      g.DrawRect(COLOR_LIGHT_GRAY, mRECT);
+    if (mDrawFrame)
+      g.DrawRect(COLOR_LIGHT_GRAY, mRECT, &mBlend);
   }
   
   void SetPattern(const IPattern& pattern)

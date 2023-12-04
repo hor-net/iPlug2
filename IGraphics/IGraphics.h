@@ -102,8 +102,10 @@ public:
   /** Draw an SVG image to the graphics context
    * @param svg The SVG image to the graphics context
    * @param bounds The rectangular region to draw the image in
-   * @param pBlend Optional blend method */
-  virtual void DrawSVG(const ISVG& svg, const IRECT& bounds, const IBlend* pBlend = 0);
+   * @param pBlend Optional blend method
+   * @param pStrokeColor Optional color to override all SVG stroke commands
+   * @param pFillColor Optional color to override all SVG fill commands */
+  virtual void DrawSVG(const ISVG& svg, const IRECT& bounds, const IBlend* pBlend = 0, const IColor* pStrokeColor = nullptr, const IColor* pFillColor = nullptr);
 
   /** Draw an SVG image to the graphics context with rotation
    * @param svg The SVG image to draw to the graphics context
@@ -422,6 +424,15 @@ public:
    * @param charHeight how high is a character in the bitmap
    * @param charOffset what is the offset between characters drawn */
   void DrawBitmapedText(const IBitmap& bitmap, const IRECT& bounds, IText& text, IBlend* pBlend, const char* str, bool vCenter = true, bool multiline = false, int charWidth = 6, int charHeight = 12, int charOffset = 0);
+  
+  /** Draw a horzional or vertical line, within a rectangular region of the graphics context
+   * @param color The color to draw the line with
+   * @param bounds The rectangular region to draw the line in
+   * @param dir The direction of the line
+   * @param pos The normalized position of the line on the horizontal or vertical axis, within bounds
+   * @param pBlend Optional blend method
+   * @param thickness Optional line thickness */
+  void DrawLineAcross(const IColor& color, const IRECT& bounds, EDirection dir, float pos, const IBlend* pBlend = 0, float thickness = 1.f);
 
   /** Draw a vertical line, within a rectangular region of the graphics context
    * @param color The color to draw the line with
@@ -760,7 +771,7 @@ public:
 private:
   IPattern GetSVGPattern(const NSVGpaint& paint, float opacity);
 
-  void DoDrawSVG(const ISVG& svg, const IBlend* pBlend = nullptr);
+  void DoDrawSVG(const ISVG& svg, const IBlend* pBlend = nullptr, const IColor* pStrokeColor = nullptr, const IColor* pFillColor = nullptr);
   
   /** Prepare a particular area of the display for drawing, normally resulting in clipping of the region.
    * @param bounds The rectangular region to prepare  */
@@ -842,6 +853,11 @@ public:
    * @param str A CString that will be used to set the current text in the clipboard
    * @return /c true on success */
   virtual bool SetTextInClipboard(const char* str) = 0;
+
+  /** Set a file path in the clipboard. Returns false on unsupported platforms
+   * @param str A CString that contains a path to a file on disk
+   * @return /c true on success */
+  virtual bool SetFilePathInClipboard(const char* path) { return false; }
 
   /** Call this if you modify control tool tips at runtime. \todo explain */
   virtual void UpdateTooltips() = 0;
@@ -1025,14 +1041,10 @@ public:
    * @param pMenu The menu that was clicked */
   void SetControlValueAfterPopupMenu(IPopupMenu* pMenu);
     
-  /** \todo 
-   * @param lo \todo
-   * @param hi \todo */
-  void SetScaleConstraints(float lo, float hi)
-  {
-    mMinScale = std::min(lo, hi);
-    mMaxScale = std::max(lo, hi);
-  }
+  /** Sets the minimum and maximum (draw) scaling values
+   * @param lo The minimum scalar that the IGraphics context can be scaled down to
+   * @param hi The maxiumum scalar that the IGraphics context can be scaled up to */
+  void SetScaleConstraints(float lo, float hi);
   
   /** \todo detailed description of how this works
    * @param w New width in pixels
@@ -1436,21 +1448,21 @@ public:
   void SetAllControlsClean();
     
   /** Reposition a control, redrawing the interface correctly
-   @param idx The index of the control
-   @param x The new x position
-   @param y The new y position */
-  void SetControlPosition(int idx, float x, float y);
+   * @param pControl The control
+   * @param x The new x position
+   * @param y The new y position */
+  void SetControlPosition(IControl* pControl, float x, float y);
   
   /** Resize a control, redrawing the interface correctly
-   @param idx The index of the control
-   @param w The new width
-   @param h The new height */
-  void SetControlSize(int idx, float w, float h);
+   * @param pControl The control
+   * @param w The new width
+   * @param h The new height */
+  void SetControlSize(IControl* pControl, float w, float h);
   
   /** Set a controls target and draw rect to r, redrawing the interface correctly
-   @param idx The index of the control 
-   @param r The new bounds for the control's target and draw rect */
-  void SetControlBounds(int idx, const IRECT& r);
+   * @param idx The index of the control
+   * @param r The new bounds for the control's target and draw rect */
+  void SetControlBounds(IControl* pControl, const IRECT& r);
   
 private:
   /** Get the index of the control at x and y coordinates on mouse event
@@ -1523,6 +1535,11 @@ public:
    * @param x The X coordinate where the drag and drop occurred
    * @param y The Y coordinate where the drag and drop occurred */
   void OnDrop(const char* str, float x, float y);
+
+  /** @param paths A vector with the absolute paths of the dropped items
+   * @param x The X coordinate where the drag and drop occurred
+   * @param y The Y coordinate where the drag and drop occurred */
+  void OnDropMultiple(const std::vector<const char*>& paths, float x, float y);
 
   /** This is an idle timer tick call on the GUI thread, only active if USE_IDLE_CALLS is defined */
   void OnGUIIdle();

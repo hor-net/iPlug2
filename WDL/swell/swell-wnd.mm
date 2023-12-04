@@ -588,7 +588,7 @@ STANDARD_CONTROL_NEEDSDISPLAY_IMPL("SysTreeView32")
   {
     POINT p;
     GetCursorPos(&p);
-    SendMessage((HWND)[self target],WM_CONTEXTMENU,(WPARAM)self,(p.x&0xffff)|(p.y<<16));
+    SendMessage((HWND)[self target],WM_CONTEXTMENU,(WPARAM)self,MAKELONG(p.x&0xffff,p.y));
   }
   
   m_fakerightmouse=0;
@@ -917,7 +917,7 @@ STANDARD_CONTROL_NEEDSDISPLAY_IMPL( m_lbMode ? "SysListView32_LB" : "SysListView
     GetCursorPos(&p);
     ScreenToClient(tgt,&p);
     
-    SendMessage(tgt,WM_MOUSEMOVE,0,(p.x&0xffff) + (((int)p.y)<<16));
+    SendMessage(tgt,WM_MOUSEMOVE,0,MAKELONG(p.x&0xffff,p.y));
   }
 }
 
@@ -1009,7 +1009,7 @@ STANDARD_CONTROL_NEEDSDISPLAY_IMPL( m_lbMode ? "SysListView32_LB" : "SysListView
         POINT p;
         GetCursorPos(&p);
         ScreenToClient(tgt,&p);      
-        SendMessage(tgt,WM_LBUTTONUP,0,(p.x&0xffff) + (((int)p.y)<<16));      
+        SendMessage(tgt,WM_LBUTTONUP,0,MAKELONG(p.x&0xffff,p.y));
       }
     }
   }
@@ -1051,7 +1051,7 @@ STANDARD_CONTROL_NEEDSDISPLAY_IMPL( m_lbMode ? "SysListView32_LB" : "SysListView
   {
     POINT p;
     GetCursorPos(&p);
-    SendMessage((HWND)[self target],WM_CONTEXTMENU,(WPARAM)self,(p.x&0xffff)|(p.y<<16));
+    SendMessage((HWND)[self target],WM_CONTEXTMENU,(WPARAM)self,MAKELONG(p.x&0xffff,p.y));
   }
   m_fakerightmouse=0;
 }
@@ -1895,11 +1895,22 @@ LRESULT SendMessage(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
       }
       return 0;
     }
-    else if (msg == WM_SETFONT && ([obj isKindOfClass:[NSTextField class]]))
+    else if (msg == WM_SETFONT && ([obj isKindOfClass:[NSTextField class]] ||
+                                   [obj isKindOfClass:[NSTextView class]]))
     {
       NSFont *font = SWELL_GetNSFont((HGDIOBJ__*)wParam);
       if (font) [obj setFont:font];
       return 0;
+    }
+    else if (msg == WM_SETFONT && ([obj isKindOfClass:[NSScrollView class]]))
+    {
+      NSView *cv=[(NSScrollView *)obj documentView];
+      if (cv && [cv isKindOfClass:[NSTextView class]])
+      {
+        NSFont *font = SWELL_GetNSFont((HGDIOBJ__*)wParam);
+        if (font) [(NSTextView *)cv setFont:font];
+        return 0;
+      }
     }
     else
     {
@@ -2034,31 +2045,61 @@ void SWELL_GetViewPort(RECT *r, const RECT *sourcerect, bool wantWork)
   NSArray *ar=[NSScreen screens];
   
   const NSInteger cnt=[ar count];
-  int cx=0;
-  int cy=0;
-  if (sourcerect)
+  if (!sourcerect || cnt < 2)
   {
-    cx=(sourcerect->left+sourcerect->right)/2;
-    cy=(sourcerect->top+sourcerect->bottom)/2;
-  }
-  for (NSInteger x = 0; x < cnt; x ++)
-  {
-    NSScreen *sc=[ar objectAtIndex:x];
+    NSScreen *sc=[NSScreen mainScreen];
     if (sc)
     {
       NSRect tr=wantWork ? [sc visibleFrame] : [sc frame];
-      if (!x || (cx >= tr.origin.x && cx < tr.origin.x+tr.size.width  &&
-                cy >= tr.origin.y && cy < tr.origin.y+tr.size.height))
-      {
-        NSRECT_TO_RECT(r,tr);
-      }
+      NSRECT_TO_RECT(r,tr);
+    }
+    else
+    {
+      r->left=r->top=0;
+      r->right=1600;
+      r->bottom=1200;
     }
   }
-  if (!cnt)
+  else
   {
-    r->left=r->top=0;
-    r->right=1600;
-    r->bottom=1200;
+    double best_score = -1e20;
+    // find screen of best intersection
+    RECT sr = *sourcerect;
+    if (sr.top > sr.bottom) { sr.top = sourcerect->bottom; sr.bottom = sourcerect->top; }
+    if (sr.left > sr.right) { sr.left = sourcerect->right; sr.right = sourcerect->left; }
+    for (NSInteger x = 0; x < cnt; x ++)
+    {
+      NSScreen *sc=[ar objectAtIndex:x];
+      if (sc)
+      {
+        NSRect tr=wantWork ? [sc visibleFrame] : [sc frame];
+        RECT tmp;
+        NSRECT_TO_RECT(&tmp,tr);
+
+        double score;
+        RECT res;
+        if (IntersectRect(&res, &tmp, &sr))
+        {
+          score = wdl_abs((res.right-res.left) * (res.bottom-res.top));
+        }
+        else
+        {
+          int dx = 0, dy = 0;
+          if (tmp.left > sr.right) dx = tmp.left - sr.right;
+          else if (tmp.right < sr.left) dx = sr.left - tmp.right;
+          if (tmp.bottom < sr.top) dy = tmp.bottom - sr.top;
+          else if (tmp.top > sr.bottom) dy = tmp.top - sr.bottom;
+          score = - (dx*dx + dy*dy);
+        }
+
+
+        if (!x || score > best_score)
+        {
+          best_score = score;
+          *r = tmp;
+        }
+      }
+    }
   }
   SWELL_END_TRY(;)
 }
@@ -2655,7 +2696,7 @@ BOOL SetDlgItemText(HWND hwnd, int idx, const char *text)
       {
         HWND par = GetParent((HWND)obj);
         if (par)
-          SendMessage(par,WM_COMMAND,[(NSControl *)obj tag]|(EN_CHANGE<<16),(LPARAM)obj);
+          SendMessage(par,WM_COMMAND,MAKELONG([(NSControl *)obj tag],EN_CHANGE),(LPARAM)obj);
       }
     }
   }
@@ -2794,7 +2835,7 @@ void SWELL_TB_SetRange(HWND hwnd, int idx, int low, int hi)
   }
   else 
   {
-    sendSwellMessage(p,TBM_SETRANGE,1,((low&0xffff)|(hi<<16)));
+    sendSwellMessage(p,TBM_SETRANGE,1,MAKELONG(low&0xffff,hi));
   }
   
 }
@@ -3496,7 +3537,7 @@ STANDARD_CONTROL_NEEDSDISPLAY_IMPL("Edit")
 - (BOOL)becomeFirstResponder;
 {
   BOOL didBecomeFirstResponder = [super becomeFirstResponder];
-  if (didBecomeFirstResponder) SendMessage(GetParent((HWND)self),WM_COMMAND,[self tag]|(EN_SETFOCUS<<16),(LPARAM)self);
+  if (didBecomeFirstResponder) SendMessage(GetParent((HWND)self),WM_COMMAND,MAKELONG([self tag],EN_SETFOCUS),(LPARAM)self);
   return didBecomeFirstResponder;
 }
 
@@ -3529,7 +3570,7 @@ STANDARD_CONTROL_NEEDSDISPLAY_IMPL([self isSelectable] ? "Edit" : "Static")
 - (BOOL)becomeFirstResponder;
 {
   BOOL didBecomeFirstResponder = [super becomeFirstResponder];
-  if (didBecomeFirstResponder) SendMessage(GetParent((HWND)self),WM_COMMAND,[self tag]|(EN_SETFOCUS<<16),(LPARAM)self);
+  if (didBecomeFirstResponder) SendMessage(GetParent((HWND)self),WM_COMMAND,MAKELONG([self tag],EN_SETFOCUS),(LPARAM)self);
   return didBecomeFirstResponder;
 }
 - (void)initColors:(int)darkmode
@@ -3610,6 +3651,7 @@ HWND SWELL_MakeEditField(int idx, int x, int y, int w, int h, int flags)
   if ((flags&WS_VSCROLL) || (flags&WS_HSCROLL)) // || (flags & ES_READONLY))
   {
     SWELL_TextView *obj=[[SWELL_TextView alloc] init];
+    [obj setAutomaticQuoteSubstitutionEnabled:NO];
     [obj setEditable:(flags & ES_READONLY)?NO:YES];
     if (m_transform.size.width < minwidfontadjust)
       [obj setFont:[NSFont systemFontOfSize:TRANSFORMFONTSIZE]];
@@ -5590,7 +5632,7 @@ LRESULT DefWindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
       HWND h=WindowFromPoint(p);
       if (h && IsChild(hwnd,h)) hwndDest=h;
     }
-    SendMessage(hwnd,WM_CONTEXTMENU,(WPARAM)hwndDest,(p.x&0xffff)|(p.y<<16));
+    SendMessage(hwnd,WM_CONTEXTMENU,(WPARAM)hwndDest,MAKELONG(p.x&0xffff,p.y));
     return 1;
   }
   else if (msg==WM_CONTEXTMENU || msg == WM_MOUSEWHEEL || msg == WM_MOUSEHWHEEL || msg == WM_GESTURE)
@@ -6854,7 +6896,7 @@ STANDARD_CONTROL_NEEDSDISPLAY_IMPL("combobox")
 - (BOOL)becomeFirstResponder;
 {
   BOOL didBecomeFirstResponder = [super becomeFirstResponder];
-  if (didBecomeFirstResponder) SendMessage(GetParent((HWND)self),WM_COMMAND,[self tag]|(EN_SETFOCUS<<16),(LPARAM)self);
+  if (didBecomeFirstResponder) SendMessage(GetParent((HWND)self),WM_COMMAND,MAKELONG([self tag],EN_SETFOCUS),(LPARAM)self);
   return didBecomeFirstResponder;
 }
 
