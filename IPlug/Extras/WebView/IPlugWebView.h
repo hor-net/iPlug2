@@ -85,6 +85,7 @@ private:
   EventRegistrationToken mWebMessageReceivedToken;
   EventRegistrationToken mNavigationCompletedToken;
   HMODULE mDLLHandle = nullptr;
+  WDL_String mTmpPath;
 #endif
 };
 
