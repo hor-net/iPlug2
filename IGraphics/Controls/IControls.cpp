@@ -516,7 +516,7 @@ int IVRadioButtonControl::GetButtonForPoint(float x, float y) const
     return IVTabSwitchControl::GetButtonForPoint(x, y);
 }
 
-IVKnobControl::IVKnobControl(const IRECT& bounds, int paramIdx, const char* label, const IVStyle& style, bool valueIsEditable, bool valueInWidget, float a1, float a2, float aAnchor,  EDirection direction, double gearing, float trackSize)
+IVKnobControl::IVKnobControl(const IRECT& bounds, int paramIdx, const char* label, const IVStyle& style, bool valueIsEditable, bool valueInWidget, EDirection direction, double gearing)
 : IKnobControlBase(bounds, paramIdx, direction, gearing)
 , IVectorBase(style, false, valueInWidget)
 {

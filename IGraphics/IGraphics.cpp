@@ -2749,7 +2749,7 @@ void IGraphics::PathTransformMatrix(const IMatrix& matrix)
     PathTransformRestore();
   }
   
-  void IGraphics::DrawSVG(const ISVG& svg, const IRECT& dest, const IBlend* pBlend)
+  void IGraphics::DrawSVG(const ISVG& svg, const IRECT& dest, const IBlend* pBlend, const IColor* pStrokeColor, const IColor* pFillColor)
   {
     float xScale = dest.W() / svg.W();
     float yScale = dest.H() / svg.H();

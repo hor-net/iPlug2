@@ -2472,6 +2472,7 @@ static constexpr float DEFAULT_TRACK_BACKGROUND_SIZE = 2.f;
 static constexpr float DEFAULT_TRACK_ZERO_VALUE = 0.f;
 static constexpr float DEFAULT_KNOB_MIN_ANGLE = -135.f;
 static constexpr float DEFAULT_KNOB_MAX_ANGLE = 135.f;
+static constexpr EOrientation DEFAULT_LABEL_ORIENTATION = EOrientation::North;
 const IText DEFAULT_LABEL_TEXT {DEFAULT_TEXT_SIZE + 5.f, EVAlign::Top};
 const IText DEFAULT_VALUE_TEXT {DEFAULT_TEXT_SIZE, EVAlign::Bottom};
 
