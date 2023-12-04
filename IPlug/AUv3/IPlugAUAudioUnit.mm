@@ -672,7 +672,17 @@ static AUAudioUnitPreset* NewAUPreset(NSInteger number, NSString* pName)
     }
     else if (currentPreset.name != nil)
     {
+      NSError* __autoreleasing _Nullable* _Nullable er;
+      
+      NSMutableDictionary<NSString*, id>* pDict = [[NSMutableDictionary<NSString*, id> alloc] init];
+      pDict = [super presetStateFor: currentPreset error: er];
+      if(pDict == nil) {
+        pDict = self.fullState;
+        [pDict setValue:currentPreset.name forKey:[NSString stringWithUTF8String: kAUPresetNameKey]];
+      }
+      self.fullStateForDocument = pDict;
       self->mCurrentPreset = currentPreset;
+      self->mPlug->OnRestoreState();
     }
   });
 }
@@ -720,6 +730,31 @@ static AUAudioUnitPreset* NewAUPreset(NSInteger number, NSString* pName)
 - (NSTimeInterval) tailTime
 {
   return (double) mPlug->GetTailSize() / mPlug->GetSampleRate();
+}
+
+- (BOOL) supportsUserPresets
+{
+  return true; //audioUnit?.supportsUserPresets ?? false
+}
+
+- (BOOL)saveUserPreset:(AUAudioUnitPreset *)userPreset
+                 error:(NSError * _Nullable *)outError
+{
+  self->mCurrentPreset = userPreset;
+  return [super saveUserPreset:userPreset error:outError];
+}
+
+- (NSDictionary<NSString*, id>*)fullStateForDocument
+{
+  NSMutableDictionary<NSString*, id>* pDict = [[NSMutableDictionary<NSString*, id> alloc] init];
+  pDict = self.fullState;
+  [pDict setValue:mCurrentPreset.name forKey:[NSString stringWithUTF8String: kAUPresetNameKey]];
+  return pDict;
+}
+
+- (void) setFullStateForDocument:(NSDictionary<NSString*, id>*)newFullState
+{
+  self.fullState = newFullState;
 }
 
 - (NSDictionary<NSString*, id>*)fullState
