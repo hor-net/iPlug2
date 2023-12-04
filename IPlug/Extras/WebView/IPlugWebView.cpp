@@ -43,8 +43,12 @@ void* IWebView::OpenWebView(void* pParent, float x, float y, float w, float h, f
   w *= scale;
   h *= scale;
 
+
+  WDL_String appSupportPath;
+  AppSupportPath(appSupportPath, false);
+
   WCHAR tmpPathWide[IPLUG_WIN_MAX_WIDE_PATH];
-  UTF8ToUTF16(tmpPathWide, mTmpPath.Get(), IPLUG_WIN_MAX_WIDE_PATH);
+  UTF8ToUTF16(tmpPathWide, appSupportPath.Get(), IPLUG_WIN_MAX_WIDE_PATH);
 
   HRESULT v = CreateCoreWebView2EnvironmentWithOptions(
     nullptr, tmpPathWide, nullptr,
