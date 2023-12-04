@@ -139,9 +139,10 @@ void IWebView::LoadHTML(const char* html)
 {
   if (mWebViewWnd)
   {
+    int size = strlen(html);
     WCHAR* htmlWide;
-    htmlWide = new WCHAR[10485760]; // TODO: error check/size
-    UTF8ToUTF16(htmlWide, html, 10485760); // TODO: error check/size
+    htmlWide = new WCHAR[size]; // TODO: error check/size
+    UTF8ToUTF16(htmlWide, html, size*2); // TODO: error check/size
     mWebViewWnd->NavigateToString(htmlWide);
     delete[] htmlWide;
   }
