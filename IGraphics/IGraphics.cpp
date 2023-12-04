@@ -92,7 +92,7 @@ void IGraphics::Resize(int w, int h, float scale, bool needsPlatformResize)
   
   scale = Clip(scale, mMinScale, mMaxScale);
   
-  if (w == Width() && h == Height() && scale == GetDrawScale()) return;
+  //if (w == Width() && h == Height() && scale == GetDrawScale()) return;
   
   //DBGMSG("resize %i, resize %i, scale %f\n", w, h, scale);
   ReleaseMouseCapture();
