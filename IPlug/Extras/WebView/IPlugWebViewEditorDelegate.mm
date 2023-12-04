@@ -35,13 +35,30 @@ using namespace iplug;
 - (id) initWithEditorDelegate: (WebViewEditorDelegate*) pDelegate;
 {
   mDelegate = pDelegate;
+  
+#ifdef OS_IOS
+  [[UIDevice currentDevice] beginGeneratingDeviceOrientationNotifications];
+  [[NSNotificationCenter defaultCenter]
+     addObserver:self selector:@selector(orientationChanged:)
+     name:UIDeviceOrientationDidChangeNotification
+     object:[UIDevice currentDevice]];
+  
+  CGRect r = [UIScreen mainScreen].applicationFrame;
+  CGFloat w = r.size.width;
+  CGFloat h = r.size.height;
+  
+#else
   CGFloat w = pDelegate->GetEditorWidth();
   CGFloat h = pDelegate->GetEditorHeight();
   CGRect r = CGRectMake(0, 0, w, h);
+#endif
   self = [super initWithFrame:r];
-  
   void* pWebView = pDelegate->OpenWebView(self, 0, 0, w, h);
 
+#ifdef OS_IOS
+  [pWebView setAutoresizingMask:UIViewAutoresizingFlexibleHeight | UIViewAutoresizingFlexibleWidth];
+#endif
+  
   [self addSubview: (PLATFORM_VIEW*) pWebView];
 
   return self;
@@ -53,8 +70,49 @@ using namespace iplug;
   //For AUv2 this is where we know about the window being closed, close via delegate
   mDelegate->CloseWindow();
 #endif
+  
+#ifdef OS_IOS
+  [[NSNotificationCenter defaultCenter]
+     removeObserver:self selector:@selector(orientationChanged:)
+     name:UIDeviceOrientationDidChangeNotification
+     object:[UIDevice currentDevice]];
+#endif
   [super removeFromSuperview];
 }
+
+#ifdef OS_IOS
+- (void) orientationChanged:(NSNotification *)note
+{
+  
+  CGRect r = [UIScreen mainScreen].applicationFrame;
+  CGFloat w = r.size.width;
+  CGFloat h = r.size.height;
+  
+   UIDevice * device = note.object;
+   switch(device.orientation)
+   {
+     case UIDeviceOrientationPortrait:
+     case UIDeviceOrientationPortraitUpsideDown:
+       w = std::min(r.size.width, r.size.height);
+       h = std::max(r.size.width, r.size.height);
+       break;
+     
+     
+       break;
+       
+     case UIDeviceOrientationLandscapeLeft:
+     case UIDeviceOrientationLandscapeRight:
+       w = std::max(r.size.width, r.size.height);
+       h = std::min(r.size.width, r.size.height);
+       break;
+
+     default:
+       break;
+   };
+  
+  mDelegate->Resize(w,h);
+}
+#endif
 
 @end
 
