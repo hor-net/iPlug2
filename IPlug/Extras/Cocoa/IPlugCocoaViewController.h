@@ -1,13 +1,3 @@
-/*
- ==============================================================================
- 
- This file is part of the iPlug 2 library. Copyright (C) the iPlug 2 developers.
- 
- See LICENSE.txt for  more info.
- 
- ==============================================================================
-*/
-
 //Avoid any C++ includes in this file for swift interop
 
 #include <TargetConditionals.h>
@@ -32,7 +22,7 @@
   void* editorDelegate;
 }
 
-- (void) setEditorDelegate: (void*) editorDelegate;
+- (void)setEditorDelegate: (void*) editorDelegate;
 
 - (BOOL) onMessage: (NSInteger) msgTag : (NSInteger) ctrlTag : (NSData*) msg;
 - (void) onParamChangeUI: (NSInteger) paramIdx : (double) value;
@@ -50,14 +40,7 @@
 - (void) sendSysexMsgFromUI: (NSData*) msg : (NSInteger) offset NS_SWIFT_NAME(sendSysexMsgFromUI(msg:offset:));
 - (void) sendArbitraryMsgFromUI: (NSInteger) msgTag : (NSInteger) ctrlTag : (NSData*) msg NS_SWIFT_NAME(sendArbitraryMsgFromUI(msgTag:ctrlTag:msg:));
 
-// TODO: shared struct?
 - (NSInteger) parameterCount NS_SWIFT_NAME(parameterCount());
-- (NSString*) getParameterName: (NSInteger) paramIdx ;//NS_SWIFT_NAME(getParameterName(paramIdx:));
-- (double) getParameterDefault: (NSInteger) paramIdx ;//NS_SWIFT_NAME(getParameterDefault(paramIdx:));
-- (double) getParameterMin: (NSInteger) paramIdx ;//NS_SWIFT_NAME(getParameterMin(paramIdx:));
-- (double) getParameterMax: (NSInteger) paramIdx ;//NS_SWIFT_NAME(getParameterMax(paramIdx:));
-- (double) getParameterStep: (NSInteger) paramIdx ;//NS_SWIFT_NAME(getParameterStep(paramIdx:));
-- (NSString*) getParameterLabel: (NSInteger) paramIdx ;//NS_SWIFT_NAME(getParameterLabel(paramIdx:));
-- (NSString*) getParameterGroup: (NSInteger) paramIdx ;//NS_SWIFT_NAME(getParameterGroup(paramIdx:));
+- (NSString*) getParameterName: (NSInteger) paramIdx NS_SWIFT_NAME(getParameterName(paramIdx:));
 
 @end
