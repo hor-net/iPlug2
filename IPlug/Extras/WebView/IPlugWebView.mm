@@ -71,10 +71,14 @@ IWebView::~IWebView()
 
 void* IWebView::OpenWebView(void* pParent, float x, float y, float w, float h, float scale)
 {  
-  WKWebViewConfiguration* webConfig = [[WKWebViewConfiguration alloc] init];
-  WKPreferences* preferences = [[WKPreferences alloc] init];
+  //WKWebViewConfiguration* webConfig = [[WKWebViewConfiguration alloc] init];
+  //WKPreferences* preferences = [[WKPreferences alloc] init];
   
-  WKUserContentController* controller = [[WKUserContentController alloc] init];
+  WKWebViewConfiguration* webConfig = [WKWebViewConfiguration new];
+  WKPreferences* preferences = [WKPreferences new];
+  
+  //WKUserContentController* controller = [[WKUserContentController alloc] init];
+  WKUserContentController* controller = [WKUserContentController new];
   webConfig.userContentController = controller;
 
   ScriptHandler* scriptHandler = [[ScriptHandler alloc] initWithIWebView: this];
@@ -146,6 +150,8 @@ void* IWebView::OpenWebView(void* pParent, float x, float y, float w, float h, f
 
 void IWebView::CloseWebView()
 {
+  if(!mWKWebView) return;
+  
   WKWebView* webView = (__bridge WKWebView*) mWKWebView;
   [webView removeFromSuperview];
   
