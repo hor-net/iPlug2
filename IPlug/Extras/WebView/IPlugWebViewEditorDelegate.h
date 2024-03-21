@@ -10,6 +10,10 @@
 
 #pragma once
 
+#ifdef AAX_API
+#include "IPlugAAX_view_interface.h"
+#endif
+
 #include "IPlugEditorDelegate.h"
 #include "IPlugWebView.h"
 #include "wdl_base64.h"
@@ -41,12 +45,18 @@ public:
   
   //IEditorDelegate
   void* OpenWindow(void* pParent) override;
+
+#ifdef OS_MAC
+  void CloseWindow() override;
+#endif
   
+#ifdef OS_WIN
   void CloseWindow() override
   {
     CloseWebView();
   }
-
+#endif
+  
   void SendControlValueFromDelegate(int ctrlTag, double normalizedValue) override
   {
     WDL_String str;
@@ -157,7 +167,7 @@ public:
   {
     mMaxJSStringLength = length;
   }
-
+  
 protected:
   int GetBase64Length(int dataSize)
   {

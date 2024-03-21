@@ -71,6 +71,12 @@ IWebView::~IWebView()
 
 void* IWebView::OpenWebView(void* pParent, float x, float y, float w, float h, float scale)
 {  
+  
+  if(mWKWebView != nullptr){
+    //SetWebViewBounds(x, y, w, h, scale);
+    return mWKWebView;
+  }
+  
   //WKWebViewConfiguration* webConfig = [[WKWebViewConfiguration alloc] init];
   //WKPreferences* preferences = [[WKPreferences alloc] init];
   
@@ -181,7 +187,7 @@ void IWebView::LoadFile(const char* fileName, const char* bundleID)
   WKWebView* webView = (__bridge WKWebView*) mWKWebView;
 
   WDL_String fullPath;
-  if(strcmp(&fileName[0],"/") == 0) {
+  if(fileName[0] == '/') {
     fullPath.Set(fileName);
   } else {
     WDL_String fileNameWeb("web/");
@@ -203,8 +209,8 @@ void IWebView::LoadFile(const char* fileName, const char* bundleID)
 void IWebView::EvaluateJavaScript(const char* scriptStr, completionHandlerFunc func)
 {
   WKWebView* webView = (__bridge WKWebView*) mWKWebView;
-  
-  bool loading = [webView isLoading];
+  if(webView.superview == NULL) return;
+  //bool loading = [webView isLoading];
   if (webView && ![webView isLoading])
   {
     [webView evaluateJavaScript:[NSString stringWithUTF8String:scriptStr] completionHandler:^(NSString *result, NSError *error) {
@@ -230,6 +236,9 @@ void IWebView::SetWebViewBounds(float x, float y, float w, float h, float scale)
 {
 //  [NSAnimationContext beginGrouping]; // Prevent animated resizing
 //  [[NSAnimationContext currentContext] setDuration:0.0];
+  WKWebView* webView = (__bridge WKWebView*) mWKWebView;
+  //if(webView.superview == NULL) return;
+  
   [(__bridge WKWebView*) mWKWebView setFrame: MAKERECT(x, y, w, h) ];
 #ifdef OS_MAC
   [(__bridge WKWebView*) mWKWebView setMagnification: scale ];

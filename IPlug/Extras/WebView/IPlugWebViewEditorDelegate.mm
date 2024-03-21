@@ -120,6 +120,7 @@ WebViewEditorDelegate::WebViewEditorDelegate(int nParams)
 : IEditorDelegate(nParams)
 , IWebView()
 {
+  
 }
 
 WebViewEditorDelegate::~WebViewEditorDelegate()
@@ -134,18 +135,36 @@ WebViewEditorDelegate::~WebViewEditorDelegate()
 void* WebViewEditorDelegate::OpenWindow(void* pParent)
 {
   PLATFORM_VIEW* pParentView = (PLATFORM_VIEW*) pParent;
-    
-  HELPER_VIEW* pHelperView = [[HELPER_VIEW alloc] initWithEditorDelegate: this];
-  mHelperView = (void*) pHelperView;
+  
+  HELPER_VIEW* pHelperView;
+  if(mHelperView == nullptr) {
+    pHelperView = [[HELPER_VIEW alloc] initWithEditorDelegate: this];
+    mHelperView = (void*) pHelperView;
+  } else {
+    pHelperView = (HELPER_VIEW*)mHelperView;
+  }
+  
 
   if (pParentView) {
     [pParentView addSubview: pHelperView];
   }
   
+  //Resize(GetEditorWidth(), GetEditorHeight());
+  [pHelperView setFrame:CGRectMake(0, 0, GetEditorWidth(), GetEditorHeight())];
+  SetWebViewBounds(0, 0, GetEditorWidth(), GetEditorHeight());
+  
   if (mEditorInitFunc)
     mEditorInitFunc();
 
   return mHelperView;
+}
+
+void WebViewEditorDelegate::CloseWindow()
+{
+#ifndef AU_API
+  HELPER_VIEW* pHelperView = (HELPER_VIEW*)mHelperView;
+  [pHelperView removeFromSuperview];
+#endif
 }
 
 void WebViewEditorDelegate::Resize(int width, int height)

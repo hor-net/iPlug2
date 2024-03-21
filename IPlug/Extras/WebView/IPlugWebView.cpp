@@ -21,11 +21,18 @@ using namespace Microsoft::WRL;
 
 IWebView::IWebView(bool opaque)
 {
+ 
 }
 
 IWebView::~IWebView()
 {
   CloseWebView();
+ 
+  if (mDLLHandle)
+  {
+    FreeLibrary(mDLLHandle);
+    mDLLHandle = nullptr;
+  }
 }
 
 typedef HRESULT(*TCCWebView2EnvWithOptions)(
@@ -50,15 +57,36 @@ void* IWebView::OpenWebView(void* pParent, float x, float y, float w, float h, f
   WCHAR tmpPathWide[IPLUG_WIN_MAX_WIDE_PATH];
   UTF8ToUTF16(tmpPathWide, appSupportPath.Get(), IPLUG_WIN_MAX_WIDE_PATH);
 
+ 
+  /* if (mWebViewCtrlr != nullptr)
+  {
+    HWND* pParent;
+    mWebViewCtrlr->get_ParentWindow(pParent);
+    mWebViewCtrlr->put_IsVisible(true);
+    mWebViewCtrlr->put_ParentWindow(hWnd);
+    RECT bounds;
+    GetClientRect(hWnd, &bounds);
+    mWebViewCtrlr->put_Bounds(bounds);
+    //mWebViewCtrlr->put_Bounds({(LONG)x, (LONG)y, (LONG)(x + w), (LONG)(y + h)});
+    mWebViewCtrlr->get_CoreWebView2(&mWebViewWnd);
+    
+    OnWebViewReady();
+    return nullptr;
+  }*/
+
   HRESULT v = CreateCoreWebView2EnvironmentWithOptions(
     nullptr, tmpPathWide, nullptr,
 
     Callback<ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler>([&, hWnd, x, y, w, h](HRESULT result, ICoreWebView2Environment* env) -> HRESULT {
+      mWebViewEnv = env;
       env->CreateCoreWebView2Controller(
         hWnd, Callback<ICoreWebView2CreateCoreWebView2ControllerCompletedHandler>([&, hWnd, x, y, w, h](HRESULT result, ICoreWebView2Controller* controller) -> HRESULT {
                 if (controller != nullptr)
                 {
+                  controller->AddRef();
                   mWebViewCtrlr = controller;
+                  mWebViewCtrlr->put_IsVisible(true);
+                  mWebViewCtrlr->put_ParentWindow(hWnd);
                   mWebViewCtrlr->get_CoreWebView2(&mWebViewWnd);
                 }
 
@@ -128,11 +156,6 @@ void IWebView::CloseWebView()
     mWebViewWnd = nullptr;
   }
 
-  if (mDLLHandle)
-  {
-    FreeLibrary(mDLLHandle);
-    mDLLHandle = nullptr;
-  }
 }
 
 void IWebView::LoadHTML(const char* html)

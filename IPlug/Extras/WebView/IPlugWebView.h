@@ -80,8 +80,9 @@ private:
   void* mWebConfig = nullptr;
   void* mScriptHandler = nullptr;
 #elif defined OS_WIN
-  wil::com_ptr<ICoreWebView2Controller> mWebViewCtrlr;
-  wil::com_ptr<ICoreWebView2> mWebViewWnd;
+  wil::com_ptr<ICoreWebView2Controller> mWebViewCtrlr = nullptr;
+  wil::com_ptr<ICoreWebView2> mWebViewWnd = nullptr;
+  wil::com_ptr<ICoreWebView2Environment> mWebViewEnv = nullptr;
   EventRegistrationToken mWebMessageReceivedToken;
   EventRegistrationToken mNavigationCompletedToken;
   HMODULE mDLLHandle = nullptr;
