@@ -387,6 +387,14 @@ void IVTabSwitchControl::DrawButton(IGraphics& g, const IRECT& r, bool pressed, 
   }
 }
 
+void IVTabSwitchControl::DrawButtonText(IGraphics& g, const IRECT& r, bool pressed, bool mouseOver, ETabSegment segment, bool disabled, const char* textStr)
+{
+  if (CStringHasContents(textStr))
+  {
+    g.DrawText(mStyle.valueText, textStr, r, &mBlend);
+  }
+}
+
 void IVTabSwitchControl::DrawWidget(IGraphics& g)
 {
   int selected = GetSelectedIdx();
@@ -396,17 +404,21 @@ void IVTabSwitchControl::DrawWidget(IGraphics& g)
   {
     IRECT r = mButtons.Get()[i];
     
-    if(i > 0)
+    if (i > 0)
       segment = ETabSegment::Mid;
     
-    if(i == mNumStates-1)
+    if (i == mNumStates-1)
       segment = ETabSegment::End;
+    
+    const bool isSelected = i == selected;
+    const bool isMouseOver = mMouseOverButton == i;
+    const bool isDisabled = IsDisabled() || GetStateDisabled(i);
 
-    DrawButton(g, r, i == selected, mMouseOverButton == i, segment, IsDisabled() || GetStateDisabled(i));
-        
-    if(mTabLabels.Get(i))
+    DrawButton(g, r, isSelected, isMouseOver, segment, isDisabled);
+    
+    if (mTabLabels.Get(i))
     {
-      g.DrawText(mStyle.valueText, mTabLabels.Get(i)->Get(), r, &mBlend);
+      DrawButtonText(g, r, isSelected, isMouseOver, segment, isDisabled, mTabLabels.Get(i)->Get());
     }
   }
 }
@@ -1164,8 +1176,8 @@ void IVPlotControl::AddPlotFunc(const IColor& color, const IPlotFunc& func)
   SetDirty(false);
 }
 
-IVGroupControl::IVGroupControl(const IRECT& bounds, const char* label, float labelOffset, const IVStyle& style)
-: IControl(bounds)
+IVGroupControl::IVGroupControl(const IRECT& bounds, const char* label, float labelOffset, const IVStyle& style, IContainerBase::AttachFunc attachFunc, IContainerBase::ResizeFunc resizeFunc)
+: IContainerBase(bounds, attachFunc, resizeFunc)
 , IVectorBase(style)
 , mLabelOffset(labelOffset)
 {
@@ -1174,7 +1186,7 @@ IVGroupControl::IVGroupControl(const IRECT& bounds, const char* label, float lab
 }
 
 IVGroupControl::IVGroupControl(const char* label, const char* groupName, float padL, float padT, float padR, float padB, const IVStyle& style)
-: IControl(IRECT())
+: IContainerBase(IRECT())
 , IVectorBase(style)
 , mGroupName(groupName)
 , mPadL(padL)

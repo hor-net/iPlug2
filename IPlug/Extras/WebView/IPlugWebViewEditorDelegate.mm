@@ -53,6 +53,7 @@ using namespace iplug;
   CGRect r = CGRectMake(0, 0, w, h);
 #endif
   self = [super initWithFrame:r];
+  
   void* pWebView = pDelegate->OpenWebView(self, 0, 0, w, h);
 
 #ifdef OS_IOS

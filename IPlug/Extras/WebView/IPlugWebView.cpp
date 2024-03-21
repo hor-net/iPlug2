@@ -19,7 +19,10 @@ See LICENSE.txt for  more info.
 using namespace iplug;
 using namespace Microsoft::WRL;
 
+extern float GetScaleForHWND(HWND hWnd);
+
 IWebView::IWebView(bool opaque)
+: mOpaque(opaque)
 {
  
 }
@@ -41,60 +44,44 @@ typedef HRESULT(*TCCWebView2EnvWithOptions)(
   PCWSTR additionalBrowserArguments,
   ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler* environment_created_handler);
 
-void* IWebView::OpenWebView(void* pParent, float x, float y, float w, float h, float scale)
+void* IWebView::OpenWebView(void* pParent, float x, float y, float w, float h, float scale, bool enableDevTools)
 {
-  HWND hWnd = (HWND)pParent;
+  HWND hWnd = (HWND) pParent;
 
-  x *= scale;
-  y *= scale;
-  w *= scale;
-  h *= scale;
+  float ss = GetScaleForHWND(mParentWnd);
 
+  x *= ss;
+  y *= ss;
+  w *= ss;
+  h *= ss;
 
-  WDL_String appSupportPath;
-  AppSupportPath(appSupportPath, false);
+  WDL_String cachePath;
+  WebViewCachePath(cachePath);
+  WCHAR cachePathWide[IPLUG_WIN_MAX_WIDE_PATH];
+  UTF8ToUTF16(cachePathWide, cachePath.Get(), IPLUG_WIN_MAX_WIDE_PATH);
 
-  WCHAR tmpPathWide[IPLUG_WIN_MAX_WIDE_PATH];
-  UTF8ToUTF16(tmpPathWide, appSupportPath.Get(), IPLUG_WIN_MAX_WIDE_PATH);
-
- 
-  /* if (mWebViewCtrlr != nullptr)
-  {
-    HWND* pParent;
-    mWebViewCtrlr->get_ParentWindow(pParent);
-    mWebViewCtrlr->put_IsVisible(true);
-    mWebViewCtrlr->put_ParentWindow(hWnd);
-    RECT bounds;
-    GetClientRect(hWnd, &bounds);
-    mWebViewCtrlr->put_Bounds(bounds);
-    //mWebViewCtrlr->put_Bounds({(LONG)x, (LONG)y, (LONG)(x + w), (LONG)(y + h)});
-    mWebViewCtrlr->get_CoreWebView2(&mWebViewWnd);
-    
-    OnWebViewReady();
-    return nullptr;
-  }*/
-
-  HRESULT v = CreateCoreWebView2EnvironmentWithOptions(
-    nullptr, tmpPathWide, nullptr,
-
-    Callback<ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler>([&, hWnd, x, y, w, h](HRESULT result, ICoreWebView2Environment* env) -> HRESULT {
-      mWebViewEnv = env;
-      env->CreateCoreWebView2Controller(
-        hWnd, Callback<ICoreWebView2CreateCoreWebView2ControllerCompletedHandler>([&, hWnd, x, y, w, h](HRESULT result, ICoreWebView2Controller* controller) -> HRESULT {
-                if (controller != nullptr)
-                {
-                  controller->AddRef();
-                  mWebViewCtrlr = controller;
-                  mWebViewCtrlr->put_IsVisible(true);
-                  mWebViewCtrlr->put_ParentWindow(hWnd);
-                  mWebViewCtrlr->get_CoreWebView2(&mWebViewWnd);
-                }
+  CreateCoreWebView2EnvironmentWithOptions(
+    nullptr, cachePathWide, nullptr,
+  Callback<ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler>(
+    [&, x, y, w, h](HRESULT result, ICoreWebView2Environment* env) -> HRESULT {
+      env
+        ->CreateCoreWebView2Controller(
+          mParentWnd,
+        Callback<ICoreWebView2CreateCoreWebView2ControllerCompletedHandler>(
+          [&, x, y, w, h, enableDevTools](HRESULT result, ICoreWebView2Controller* controller) -> HRESULT {
+            if (controller != nullptr)
+            {
+              mWebViewCtrlr = controller;
+              mWebViewCtrlr->get_CoreWebView2(&mWebViewWnd);
+            }
 
                 ICoreWebView2Settings* Settings;
                 mWebViewWnd->get_Settings(&Settings);
                 Settings->put_IsScriptEnabled(TRUE);
                 Settings->put_AreDefaultScriptDialogsEnabled(TRUE);
                 Settings->put_IsWebMessageEnabled(TRUE);
+ 		Settings->put_AreDefaultContextMenusEnabled(enableDevTools);
+            	Settings->put_AreDevToolsEnabled(enableDevTools);
                 #ifndef _DEBUG
                 Settings->put_AreDevToolsEnabled(FALSE);
                 #endif
@@ -102,10 +89,12 @@ void* IWebView::OpenWebView(void* pParent, float x, float y, float w, float h, f
 
 
 
-                // this script adds a function IPlugSendMsg that is used to call the platform webview messaging function in JS
-                mWebViewWnd->AddScriptToExecuteOnDocumentCreated(
-                  L"function IPlugSendMsg(m) {window.chrome.webview.postMessage(m)};",
-                  Callback<ICoreWebView2AddScriptToExecuteOnDocumentCreatedCompletedHandler>([this](HRESULT error, PCWSTR id) -> HRESULT { return S_OK; }).Get());
+            // this script adds a function IPlugSendMsg that is used to call the platform webview messaging function in JS
+            mWebViewWnd->AddScriptToExecuteOnDocumentCreated(L"function IPlugSendMsg(m) {window.chrome.webview.postMessage(m)};",
+              Callback<ICoreWebView2AddScriptToExecuteOnDocumentCreatedCompletedHandler>(
+                [this](HRESULT error, PCWSTR id) -> HRESULT {
+                  return S_OK;
+                }).Get());
 
                 #ifndef _DEBUG
                 // disables the right click on gui
@@ -137,14 +126,14 @@ void* IWebView::OpenWebView(void* pParent, float x, float y, float w, float h, f
                                                      }).Get(),
                                                      &mNavigationCompletedToken);
 
-                mWebViewCtrlr->put_Bounds({(LONG)x, (LONG)y, (LONG)(x + w), (LONG)(y + h)});
-                OnWebViewReady();
-                return S_OK;
-              }).Get());
+            mWebViewCtrlr->put_Bounds({ (LONG)x, (LONG)y, (LONG)(x + w), (LONG)(y + h) });
+            OnWebViewReady();
+            return S_OK;
+          }).Get());
       return S_OK;
     }).Get());
 
-  return nullptr;
+  return mParentWnd;
 }
 
 void IWebView::CloseWebView()
@@ -155,7 +144,20 @@ void IWebView::CloseWebView()
     mWebViewCtrlr = nullptr;
     mWebViewWnd = nullptr;
   }
+}
 
+void IWebView::HideWebView(bool hide)
+{
+  if (mWebViewCtrlr.get() != nullptr)
+  {
+    mWebViewCtrlr->put_IsVisible(!hide);
+  }
+  else
+  {
+    // the controller is set asynchonously, so we store the state 
+    // to apply it when the controller is created
+    mShowOnLoad = !hide;
+  }
 }
 
 void IWebView::LoadHTML(const char* html)
@@ -218,18 +220,25 @@ void IWebView::EvaluateJavaScript(const char* scriptStr, completionHandlerFunc f
 
 void IWebView::EnableScroll(bool enable)
 {
-  // TODO?
+  /* NO-OP */
+}
+
+void IWebView::EnableInteraction(bool enable)
+{
+  /* NO-OP */
 }
 
 void IWebView::SetWebViewBounds(float x, float y, float w, float h, float scale)
 {
   if (mWebViewCtrlr)
   {
-    x *= scale;
-    y *= scale;
-    w *= scale;
-    h *= scale;
+    float ss = GetScaleForHWND(mParentWnd);
 
-    mWebViewCtrlr->put_Bounds({ (LONG)x, (LONG)y, (LONG)(x + w), (LONG)(y + h) });
+    x *= ss;
+    y *= ss;
+    w *= ss;
+    h *= ss;
+
+    mWebViewCtrlr->SetBoundsAndZoomFactor({ (LONG)x, (LONG)y, (LONG)(x + w), (LONG)(y + h) }, scale);
   }
 }

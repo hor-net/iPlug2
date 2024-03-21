@@ -60,6 +60,7 @@
 #endif
     IGraphicsMac* pGraphics = new IGraphicsMac(dlg, w, h, fps, scale);
     pGraphics->SetBundleID(BUNDLE_ID);
+    pGraphics->SetAppGroupID(APP_GROUP_ID);
     pGraphics->SetSharedResourcesSubPath(SHARED_RESOURCES_SUBPATH);
     
     return pGraphics;
@@ -69,6 +70,7 @@
   {
     IGraphicsIOS* pGraphics = new IGraphicsIOS(dlg, w, h, fps, scale);
     pGraphics->SetBundleID(BUNDLE_ID);
+    pGraphics->SetAppGroupID(APP_GROUP_ID);
 
     return pGraphics;
   }

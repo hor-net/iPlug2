@@ -14,16 +14,8 @@
 
 #if defined OS_MAC || defined OS_LINUX
 #include <IPlugSWELL.h>
-#endif
-
-#if defined OS_MAC
-int GetTitleBarOffset()
-{
-  int offset = GetSystemMetrics(SM_CYMENU);
-  offset += 4;
-  
-  return offset;
-}
+#else
+extern float GetScaleForHWND(HWND hWnd);
 #endif
 
 using namespace iplug;
@@ -65,7 +57,7 @@ bool IPlugAPP::EditorResize(int viewWidth, int viewHeight)
     
   if (viewWidth != GetEditorWidth() || viewHeight != GetEditorHeight())
   {
-    #ifdef OS_MAC
+    #if defined OS_MAC || defined NO_IGRAPHICS 
     RECT rcClient, rcWindow;
     POINT ptDiff;
     
@@ -75,7 +67,19 @@ bool IPlugAPP::EditorResize(int viewWidth, int viewHeight)
     ptDiff.x = (rcWindow.right - rcWindow.left) - rcClient.right;
     ptDiff.y = (rcWindow.bottom - rcWindow.top) - rcClient.bottom;
     
-    SetWindowPos(gHWND, 0, rcWindow.left, rcWindow.bottom - viewHeight - ptDiff.y, viewWidth + ptDiff.x, viewHeight + ptDiff.y, 0);
+    int flags = 0;
+    
+    #ifdef OS_WIN
+    flags = SWP_NOMOVE;
+    float ss = GetScaleForHWND(gHWND);
+    #else
+    float ss = 1.f;
+    #endif
+    
+    SetWindowPos(gHWND, 0, rcWindow.left * ss,
+                 (rcWindow.bottom - viewHeight - ptDiff.y) * ss,
+                 (viewWidth + ptDiff.x) * ss,
+                 (viewHeight + ptDiff.y) * ss, flags);
     parentResized = true;
     #endif
     

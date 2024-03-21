@@ -43,6 +43,7 @@ struct IGestureInfo;
 
 using IActionFunction = std::function<void(IControl*)>;
 using IAnimationFunction = std::function<void(IControl*)>;
+using IControlFunction = std::function<void(IControl*)>;
 using ILambdaDrawFunction = std::function<void(ILambdaControl*, IGraphics&, IRECT&)>;
 using IKeyHandlerFunc = std::function<bool(const IKeyPress& key, bool isUp)>;
 using IMsgBoxCompletionHandlerFunc = std::function<void(EMsgBoxResult result)>;
@@ -2592,7 +2593,7 @@ struct IVStyle
   IVStyle WithValueText(const IText& text) const { IVStyle newStyle = *this; newStyle.valueText = text; return newStyle; }
   IVStyle WithHideCursor(bool hide = true) const { IVStyle newStyle = *this; newStyle.hideCursor = hide; return newStyle; }
   IVStyle WithColor(EVColor idx, IColor color) const { IVStyle newStyle = *this; newStyle.colorSpec.mColors[idx] = color; return newStyle; }
-  IVStyle WithColors(IVColorSpec spec) const { IVStyle newStyle = *this; newStyle.colorSpec = spec; return newStyle; }
+  IVStyle WithColors(const IVColorSpec& spec) const { IVStyle newStyle = *this; newStyle.colorSpec = spec; return newStyle; }
   IVStyle WithRoundness(float v) const { IVStyle newStyle = *this; newStyle.roundness = Clip(v, 0.f, 1.f); return newStyle; }
   IVStyle WithFrameThickness(float v) const { IVStyle newStyle = *this; newStyle.frameThickness = v; return newStyle; }
   IVStyle WithPointerThickness(float v) const { IVStyle newStyle = *this; newStyle.pointerThickness = v; return newStyle; }

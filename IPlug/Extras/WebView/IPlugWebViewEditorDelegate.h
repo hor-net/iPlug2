@@ -167,8 +167,16 @@ public:
   {
     mMaxJSStringLength = length;
   }
+
+  void SetEnableDevTools(bool enable)
+  {
+    mEnableDevTools = enable;
+  }
   
+  bool GetEnableDevTools() const { return mEnableDevTools; }
+
 protected:
+  
   int GetBase64Length(int dataSize)
   {
     return static_cast<int>(4. * std::ceil((static_cast<double>(dataSize) / 3.)));
@@ -178,6 +186,9 @@ protected:
   std::function<void()> mEditorInitFunc = nullptr;
   void* mHelperView = nullptr;
   float mScale;
+  
+private:
+  bool mEnableDevTools = false;
 };
 
 END_IPLUG_NAMESPACE

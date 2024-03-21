@@ -413,6 +413,7 @@ struct Config
   int plugMaxHeight;
   bool plugHostResize;
   const char* bundleID;
+  const char* appGroupID;
   
   Config(int nParams,
          int nPresets,
@@ -437,7 +438,8 @@ struct Config
          int plugMaxWidth,
          int plugMinHeight,
          int plugMaxHeight,
-         const char* bundleID)
+         const char* bundleID,
+         const char* appGroupID)
               
   : nParams(nParams)
   , nPresets(nPresets)
@@ -463,6 +465,7 @@ struct Config
   , plugMaxHeight(plugMaxHeight)
   , plugHostResize(plugHostResize)
   , bundleID(bundleID)
+  , appGroupID(appGroupID)
   {};
 };
 
@@ -615,12 +618,12 @@ struct IKeyPress
   char utf8[5] = { 0 }; // UTF8 key
   bool S, C, A; // SHIFT / CTRL(WIN) or CMD (MAC) / ALT
 
-  /** \todo
-   * @param _utf8 \todo
-   * @param vk \todo
-   * @param s \todo
-   * @param c \todo
-   * @param a \todo */
+  /** IKeyPress Constructor
+   * @param _utf8 UTF8 key
+   * @param vk Windows Virtual Key
+   * @param s Is SHIFT modifier pressed
+   * @param c Is CTRL/CMD modifier pressed
+   * @param a Is ALT modifier pressed */
   IKeyPress(const char* _utf8, int vk, bool s = false, bool c = false, bool a = false)
     : VK(vk)
     , S(s), C(c), A(a)
