@@ -11,6 +11,7 @@
 #import "IPlugAUPlayer.h"
 #include "IPlugConstants.h"
 #include "config.h"
+#import "IPlugAUAudioUnit.h"
 
 #if !__has_feature(objc_arc)
 #error This file must be compiled with Arc. Use -fobjc-arc flag
@@ -60,10 +61,9 @@ bool isInstrument()
     return;
   
   avAudioUnit = audioUnit;
-  
   [engine attachNode:avAudioUnit];
-
   self.currentAudioUnit = avAudioUnit.AUAudioUnit;
+  [(IPLUG_AUAUDIOUNIT*) self.currentAudioUnit setHost: "standalone" : 1];
   
   [self setupSession];
     
