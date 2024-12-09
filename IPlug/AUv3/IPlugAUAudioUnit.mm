@@ -831,6 +831,11 @@ static AUAudioUnitPreset* NewAUPreset(NSInteger number, NSString* pName)
 
 #pragma mark - IPlugAUAudioUnit
 
+- (void) setHost: (char*) name : (int) version;
+{
+  mPlug->SetHost(name, version);
+}
+
 - (void) beginInformHostOfParamChange: (uint64_t) address;
 {
   AUParameter* parameterToChange = [mParameterTree parameterWithAddress:address];

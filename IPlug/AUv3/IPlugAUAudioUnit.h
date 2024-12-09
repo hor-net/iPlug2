@@ -23,6 +23,7 @@
 #endif
 
 @interface IPLUG_AUAUDIOUNIT : AUAudioUnit
+- (void) setHost: (char*) name : (int) version;
 - (void) beginInformHostOfParamChange: (uint64_t) address;
 - (void) informHostOfParamChange: (uint64_t) address : (float) realValue;
 - (void) endInformHostOfParamChange: (uint64_t) address;
