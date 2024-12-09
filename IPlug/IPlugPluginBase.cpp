@@ -645,7 +645,9 @@ bool IPluginBase::SavePresetAsFXP(const char* file) const
 {
   if (CStringHasContents(file))
   {
+    errno = 0;
     FILE* fp = fopenUTF8(file, "wb");
+    if(fp==NULL) printf("Error %d \n", errno);
     
     IByteChunk pgm;
     

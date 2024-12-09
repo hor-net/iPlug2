@@ -292,11 +292,26 @@ void VST3PresetsPath(WDL_String& path, const char* mfrName, const char* pluginNa
 
 void INIPath(WDL_String& path, const char* pluginName)
 {
-  path.Set("");
+  //path.Set("");
+  AppSupportPath(path, false);
+  path.AppendFormatted(MAX_MACOS_PATH_LEN, "/%s", pluginName);
+  NSError *error;
+  NSString* fullPath = [NSString stringWithUTF8String: path.Get()];
+  if (![[NSFileManager defaultManager] fileExistsAtPath: fullPath])
+      [[NSFileManager defaultManager] createDirectoryAtPath:fullPath withIntermediateDirectories:YES attributes:nil error:&error];
 }
 
 void AppSupportPath(WDL_String& path, bool isSystem)
 {
+  NSArray* pPaths;
+  
+  if (isSystem)
+    pPaths = NSSearchPathForDirectoriesInDomains(NSApplicationSupportDirectory, NSSystemDomainMask, YES);
+  else
+    pPaths = NSSearchPathForDirectoriesInDomains(NSApplicationSupportDirectory, NSUserDomainMask, YES);
+  
+  NSString *pApplicationSupportDirectory = [pPaths objectAtIndex:0];
+  path.Set([pApplicationSupportDirectory UTF8String]);
 }
 
 void AppGroupContainerPath(WDL_String& path, const char* appGroupID)
