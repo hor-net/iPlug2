@@ -75,16 +75,17 @@ void* IWebView::OpenWebView(void* pParent, float x, float y, float w, float h, f
               mWebViewCtrlr->get_CoreWebView2(&mWebViewWnd);
             }
 
-                ICoreWebView2Settings* Settings;
-                mWebViewWnd->get_Settings(&Settings);
-                Settings->put_IsScriptEnabled(TRUE);
-                Settings->put_AreDefaultScriptDialogsEnabled(TRUE);
-                Settings->put_IsWebMessageEnabled(TRUE);
- 		Settings->put_AreDefaultContextMenusEnabled(enableDevTools);
-            	Settings->put_AreDevToolsEnabled(enableDevTools);
-                #ifndef _DEBUG
-                Settings->put_AreDevToolsEnabled(FALSE);
-                #endif
+            ICoreWebView2Settings* Settings;
+            mWebViewWnd->get_Settings(&Settings);
+            Settings->put_IsScriptEnabled(TRUE);
+            Settings->put_AreDefaultScriptDialogsEnabled(TRUE);
+            Settings->put_IsWebMessageEnabled(TRUE);
+            Settings->put_AreDefaultContextMenusEnabled(FALSE);
+            Settings->put_AreDevToolsEnabled(FALSE);
+            #ifdef _DEBUG
+            Settings->put_AreDefaultContextMenusEnabled(TRUE);
+            Settings->put_AreDevToolsEnabled(TRUE);
+            #endif
 
 
 
