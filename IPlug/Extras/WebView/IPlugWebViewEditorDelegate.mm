@@ -166,7 +166,7 @@ void* WebViewEditorDelegate::OpenWindow(void* pParent)
 {
   PLATFORM_VIEW* pParentView = (PLATFORM_VIEW*) pParent;
     
-  HELPER_VIEW* pHelperView = [[HELPER_VIEW alloc] initWithEditorDelegate: this];
+  IPLUG_WKWEBVIEW_EDITOR_HELPER* pHelperView = [[IPLUG_WKWEBVIEW_EDITOR_HELPER alloc] initWithEditorDelegate: this];
   mHelperView = (void*) pHelperView;
 
   if (pParentView)

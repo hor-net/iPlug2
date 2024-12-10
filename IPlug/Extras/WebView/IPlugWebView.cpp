@@ -28,42 +28,20 @@
 */
 
 #include "IPlugWebView.h"
-#include "IPlugPaths.h"
-#include <string>
-#include <windows.h>
-#include <shlobj.h>
-#include <cassert>
-#include <filesystem>
 
 #include <memory>
 
 using namespace iplug;
 
-extern float GetScaleForHWND(HWND hWnd);
-
-IWebView::IWebView(bool opaque)
-: mOpaque(opaque)
+IWebView::IWebView(bool opaque, bool enableDevTools, const char* customUrlScheme)
+: mpImpl(std::make_unique<IWebViewImpl>(this))
+, mOpaque(opaque)
 {
   SetCustomUrlScheme(customUrlScheme);
   SetEnableDevTools(enableDevTools);
 }
 
-IWebView::~IWebView()
-{
-  CloseWebView();
- 
-  if (mDLLHandle)
-  {
-    FreeLibrary(mDLLHandle);
-    mDLLHandle = nullptr;
-  }
-}
-
-typedef HRESULT(*TCCWebView2EnvWithOptions)(
-  PCWSTR browserExecutableFolder,
-  PCWSTR userDataFolder,
-  PCWSTR additionalBrowserArguments,
-  ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler* environment_created_handler);
+IWebView::~IWebView() = default;
 
 void* IWebView::OpenWebView(void* pParent, float x, float y, float w, float h, float scale)
 {
