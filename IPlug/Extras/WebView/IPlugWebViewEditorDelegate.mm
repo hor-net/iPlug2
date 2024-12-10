@@ -109,6 +109,10 @@ using namespace iplug;
        break;
    };
   
+  UIEdgeInsets safeAreaInsets = self.safeAreaInsets;
+  w = w - safeAreaInsets.top - safeAreaInsets.bottom;
+  h = h - safeAreaInsets.left - safeAreaInsets.right;
+  
   mDelegate->Resize(w,h);
 }
 #endif
