@@ -480,6 +480,8 @@ void IGraphicsNanoVG::OnViewDestroyed()
 
 void IGraphicsNanoVG::DrawResize()
 {
+  ActivateGLContext();
+  
   if (mMainFrameBuffer != nullptr)
     nvgDeleteFramebuffer(mMainFrameBuffer);
   
@@ -490,6 +492,8 @@ void IGraphicsNanoVG::DrawResize()
     if (mMainFrameBuffer == nullptr)
       DBGMSG("Could not init FBO.\n");
   }
+  
+  DeactivateGLContext();
 }
 
 void IGraphicsNanoVG::BeginFrame()
@@ -913,7 +917,7 @@ void IGraphicsNanoVG::DrawFastDropShadow(const IRECT& innerBounds, const IRECT& 
   nvgBeginPath(mVG);
 }
 
-void IGraphicsNanoVG::DrawMultiLineText(const IText& text, const char* str, IRECT& bounds, const IBlend* pBlend)
+void IGraphicsNanoVG::DrawMultiLineText(const IText& text, const char* str, const IRECT& bounds, const IBlend* pBlend)
 {
   nvgSave(mVG);
   nvgFontSize(mVG, text.mSize);

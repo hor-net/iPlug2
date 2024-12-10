@@ -1241,7 +1241,7 @@ EEL_F eel_lice_state::gfx_setfont(void *opaque, int np, EEL_F **parms)
           unsigned int c = np > 3 ? (unsigned int) parms[3][0] : 0;
           while (c)
           {
-            switch (toupper(c&0xff))
+            switch (toupper_safe(c&0xff))
             {
               case 'B': fontflag|=EELFONT_FLAG_BOLD; break;
               case 'I': fontflag|=EELFONT_FLAG_ITALIC; break;
@@ -2132,8 +2132,8 @@ static EEL_F NSEEL_CGEN_CALL _gfx_getchar(void *opaque, INT_PTR np, EEL_F **plis
             rv|=4;
             if (*p != 65537.0)
             {
-              POINT p;
-              GetCursorPos(&p);
+              POINT pt;
+              GetCursorPos(&pt);
               RECT r;
               GetWindowRect(ctx->hwnd_standalone,&r);
               if (r.top > r.bottom)
@@ -2142,7 +2142,7 @@ static EEL_F NSEEL_CGEN_CALL _gfx_getchar(void *opaque, INT_PTR np, EEL_F **plis
                 r.top = r.bottom;
                 r.bottom = a;
               }
-              if (PtInRect(&r,p) && WindowFromPoint(p) == ctx->hwnd_standalone) rv|=8;
+              if (PtInRect(&r,pt) && WindowFromPoint(pt) == ctx->hwnd_standalone) rv|=8;
             }
           }
         }

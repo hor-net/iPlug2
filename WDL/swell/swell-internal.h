@@ -456,6 +456,8 @@ typedef struct WindowPropRec
 -(int)swellSetProp:(const char *)name value:(void *)val ;
 -(NSOpenGLContext *)swellGetGLContext;
 - (void) setEnabledSwellNoFocus;
+- (void) setEnabled:(BOOL)en;
+- (BOOL) isEnabled;
 -(const char *)getSwellClass;
 
 // NSAccessibility
@@ -511,6 +513,7 @@ typedef struct WindowPropRec
   int m_wantraiseamt;
   bool  m_wantInitialKeyWindowOnShow;
   bool m_lastZoom;
+  bool m_disableMonitorAutosize;
 }
 - (id)initModeless:(SWELL_DialogResourceIndex *)resstate Parent:(HWND)parent dlgProc:(DLGPROC)dlgproc Param:(LPARAM)par outputHwnd:(HWND *)hwndOut forceStyles:(unsigned int)smask;
 - (id)initModelessForChild:(HWND)child owner:(HWND)owner styleMask:(unsigned int)smask;
@@ -774,7 +777,9 @@ SWELL_IMPLEMENT_GETOSXVERSION int SWELL_GetOSXVersion()
   {
     if (NSAppKitVersionNumber >= 1266.0)
     {
-      if (NSAppKitVersionNumber >= 2299.0)
+      if (NSAppKitVersionNumber >= 2487.0)
+        v = 0x1400;
+      else if (NSAppKitVersionNumber >= 2299.0)
         v = 0x1300;
       else if (NSAppKitVersionNumber >= 2100.0)
         v = 0x1200;
@@ -898,6 +903,7 @@ struct HWND__
 
   int m_refcnt; 
   int m_oswindow_private; // private state for generic-gtk or whatever
+  RECT m_oswindow_lastcfgpos; // gdk will check for duplicate configure events and ignore
 
   HMENU m_menu;
   HFONT m_font;

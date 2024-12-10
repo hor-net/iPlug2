@@ -369,7 +369,7 @@ public:
    * @param str The text string to draw
    * @param bounds The rectangular region in the graphics where you would like to draw the text
    * @param pBlend Optional blend method */
-  virtual void DrawMultiLineText(const IText& text, const char* str, IRECT& bounds, const IBlend* pBlend = 0) { DrawText(text, "Unsupported", bounds, pBlend); }
+  virtual void DrawMultiLineText(const IText& text, const char* str, const IRECT& bounds, const IBlend* pBlend = 0) { DrawText(text, "Unsupported", bounds, pBlend); }
 
   /** Get the color at an X, Y location in the graphics context
    * @param x The X coordinate of the pixel
@@ -979,15 +979,15 @@ public:
   virtual const char* GetAppGroupID() const { return ""; }
 
 protected:
-  /* Implemented on Windows to store previously active GLContext and HDC for restoring, calls GetDC */
-  virtual void ActivateGLContext() {}; 
+  /* Activate the context for the view (GL only) */
+  virtual void ActivateGLContext() {};
 
-  /* Implemented on Windows to restore previous GL context calls ReleaseDC */
+  /* Deactivate the context for the view (GL only) */
   virtual void DeactivateGLContext() {};
 
   /** Creates a platform native text entry field.
   * @param paramIdx The index of the parameter associated with the text entry field.
-  * @param text The text to be displayed in the text entry field.
+  * @param text The IText style for the text entry field text.
   * @param bounds The rectangle that defines the size and position of the text entry field.
   * @param length The maximum allowed length of the text in the text entry field.
   * @param str The initial string to be displayed in the text entry field. */
@@ -999,7 +999,7 @@ protected:
    * @param isAsync This gets set true on platforms where popupmenu creation is asyncronous
    * @return A ptr to the chosen IPopupMenu or nullptr in the case of async or dismissed menu */
   virtual IPopupMenu* CreatePlatformPopupMenu(IPopupMenu& menu, const IRECT bounds, bool& isAsync) = 0;
-
+  
 #pragma mark - Base implementation
 public:
   IGraphics(IGEditorDelegate& dlg, int w, int h, int fps = DEFAULT_FPS, float scale = 1.);
@@ -1064,6 +1064,11 @@ public:
    * @param pMenu The menu that was clicked */
   void SetControlValueAfterPopupMenu(IPopupMenu* pMenu);
     
+  /** Called by IOS platform (or other supported platforms) in order to update a control with a deletion interaction on a popup menu.
+   * @param pMenu The menu that an item was deleted in 
+   * @param itemIdx The index of the deleted item */
+  void DeleteFromPopupMenu(IPopupMenu* pMenu, int itemIdx);
+
   /** Sets the minimum and maximum (draw) scaling values
    * @param lo The minimum scalar that the IGraphics context can be scaled down to
    * @param hi The maxiumum scalar that the IGraphics context can be scaled up to */
