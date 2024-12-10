@@ -225,6 +225,9 @@ void* IWebView::OpenWebView(void* pParent, float x, float y, float w, float h, f
     webView.scrollView.backgroundColor = [UIColor clearColor];
     webView.opaque = NO;
   }
+#if defined _DEBUG
+  webView.inspectable = YES;
+#endif
 #endif
 
 #if defined OS_MAC
