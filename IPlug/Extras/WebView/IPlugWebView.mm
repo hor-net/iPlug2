@@ -193,6 +193,11 @@ void* IWebView::OpenWebView(void* pParent, float x, float y, float w, float h, f
 #endif
   webConfig.preferences = preferences;
   
+#ifdef OS_IOS
+  NSString* userAgent = @"iOS version";
+  webConfig.applicationNameForUserAgent = userAgent;
+#endif
+  
   // this script adds a function IPlugSendMsg that is used to call the platform webview messaging function in JS
   WKUserScript* script1 = [[WKUserScript alloc] initWithSource:
                            @"function IPlugSendMsg(m) { webkit.messageHandlers.callback.postMessage(m); }" injectionTime:WKUserScriptInjectionTimeAtDocumentStart forMainFrameOnly:YES];
