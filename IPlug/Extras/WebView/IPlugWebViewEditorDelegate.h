@@ -104,7 +104,12 @@ public:
 
   void OnMessageFromWebView(const char* jsonStr) override
   {
-    auto json = nlohmann::json::parse(jsonStr, nullptr, false);
+    nlohmann::json json;
+    try {
+      json = nlohmann::json::parse(jsonStr, nullptr, false);
+    } catch (nlohmann::json::exception& e) {
+      return;
+    }
     
     if(json["msg"] == "SPVFUI")
     {
