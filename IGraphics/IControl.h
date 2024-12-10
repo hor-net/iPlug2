@@ -1937,7 +1937,7 @@ protected:
   const bool mScanRecursively;
   const bool mShowFileExtensions;
   const bool mShowEmptySubmenus;
-  int mSelectedIndex = -1;
+  int mSelectedItemIndex = -1;
   IPopupMenu mMainMenu;
   WDL_PtrList<WDL_String> mPaths;
   WDL_PtrList<WDL_String> mPathLabels;
