@@ -240,8 +240,7 @@ void IWebView::SetWebViewBounds(float x, float y, float w, float h, float scale)
 {
   if (mWebViewCtrlr)
   {
-    float ss = GetScaleForHWND(mParentWnd);
-
+    float ss = scale;
     x *= ss;
     y *= ss;
     w *= ss;
