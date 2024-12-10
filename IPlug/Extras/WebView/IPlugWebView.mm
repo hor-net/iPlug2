@@ -206,7 +206,7 @@ void* IWebView::OpenWebView(void* pParent, float x, float y, float w, float h, f
   // this script prevents view scaling on iOS
   WKUserScript* script2 = [[WKUserScript alloc] initWithSource:
                            @"var meta = document.createElement('meta'); meta.name = 'viewport'; \
-                             meta.content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, shrink-to-fit=YES'; \
+                             meta.content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, shrink-to-fit=YES, viewport-fit=cover'; \
                              var head = document.getElementsByTagName('head')[0]; \
                              head.appendChild(meta);"
                            injectionTime:WKUserScriptInjectionTimeAtDocumentEnd forMainFrameOnly:YES];
