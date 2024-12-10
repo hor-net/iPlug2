@@ -43,7 +43,7 @@ using namespace iplug;
      name:UIDeviceOrientationDidChangeNotification
      object:[UIDevice currentDevice]];
   
-  CGRect r = [UIScreen mainScreen].applicationFrame;
+  CGRect r = [UIScreen mainScreen].bounds;
   CGFloat w = r.size.width;
   CGFloat h = r.size.height;
   
