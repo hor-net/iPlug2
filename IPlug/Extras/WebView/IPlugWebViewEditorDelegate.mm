@@ -53,11 +53,9 @@ using namespace iplug;
   CGRect r = CGRectMake(0, 0, w, h);
 #endif
   self = [super initWithFrame:r];
-  
   void* pWebView = pDelegate->OpenWebView(self, 0, 0, w, h);
-
 #ifdef OS_IOS
-  [pWebView setAutoresizingMask:UIViewAutoresizingFlexibleHeight | UIViewAutoresizingFlexibleWidth];
+  [pWebView setAutoresizingMask: UIViewAutoresizingFlexibleLeftMargin | UIViewAutoresizingFlexibleRightMargin | UIViewAutoresizingFlexibleTopMargin | UIViewAutoresizingFlexibleBottomMargin];
 #endif
   
   [self addSubview: (PLATFORM_VIEW*) pWebView];
@@ -85,7 +83,7 @@ using namespace iplug;
 - (void) orientationChanged:(NSNotification *)note
 {
   
-  CGRect r = [UIScreen mainScreen].applicationFrame;
+  CGRect r = self.bounds; //[UIScreen mainScreen].bounds;
   CGFloat w = r.size.width;
   CGFloat h = r.size.height;
   
