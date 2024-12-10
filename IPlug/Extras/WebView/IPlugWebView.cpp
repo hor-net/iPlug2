@@ -96,13 +96,20 @@ void* IWebView::OpenWebView(void* pParent, float x, float y, float w, float h, f
                   return S_OK;
                 }).Get());
 
-                #ifndef _DEBUG
-                // disables the right click on gui
-                mWebViewWnd->AddScriptToExecuteOnDocumentCreated(
-                  L"document.addEventListener('contextmenu', event => event.preventDefault());document.addEventListener('contextmenu', event => event.preventDefault());",
-                  Callback<ICoreWebView2AddScriptToExecuteOnDocumentCreatedCompletedHandler>([this](HRESULT error, PCWSTR id) -> HRESULT { return S_OK; }).Get());
+            // this script captures the spacebar key press and forward it to the host app
+            mWebViewWnd->AddScriptToExecuteOnDocumentCreated(
+              L"document.addEventListener('keydown', function(e) { if(e.keyCode == 32 && document.activeElement.type != \"text\") { IPlugSendMsg({\"msg\":\"keypress\",\"data\":e.keyCode}); }});",
+              Callback<ICoreWebView2AddScriptToExecuteOnDocumentCreatedCompletedHandler>([this](HRESULT error, PCWSTR id) -> HRESULT { return S_OK; }).Get());
 
-                #endif
+            #ifndef _DEBUG
+            // disables the right click on gui
+            mWebViewWnd->AddScriptToExecuteOnDocumentCreated(
+                L"document.addEventListener('contextmenu', event => event.preventDefault());document.addEventListener('contextmenu', event => event.preventDefault());",
+                Callback<ICoreWebView2AddScriptToExecuteOnDocumentCreatedCompletedHandler>
+                  ([this](HRESULT error, PCWSTR id) -> HRESULT {
+                    return S_OK;
+                }).Get());
+           #endif
 
                 mWebViewWnd->add_WebMessageReceived(Callback<ICoreWebView2WebMessageReceivedEventHandler>([this](ICoreWebView2* sender, ICoreWebView2WebMessageReceivedEventArgs* args) {
                                                       wil::unique_cotaskmem_string jsonString;

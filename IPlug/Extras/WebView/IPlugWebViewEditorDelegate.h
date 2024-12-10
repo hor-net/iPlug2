@@ -139,6 +139,17 @@ public:
                        json["dataByte2"].get<uint8_t>()};
       SendMidiMsgFromUI(msg);
     }
+  #ifdef OS_WIN
+    else if (json["msg"] == "keypress")
+    {
+      if (json["data"].is_number_integer())
+      {
+        if (json["data"] == 32) { // spacebar
+          PostMessage(mParentWnd, WM_KEYDOWN, VK_SPACE, 0);
+        }
+      }
+    }
+   #endif
   }
 
   void Resize(int width, int height);
