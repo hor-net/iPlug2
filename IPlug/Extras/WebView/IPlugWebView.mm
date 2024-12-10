@@ -163,18 +163,9 @@ IWebView::~IWebView()
 void* IWebView::OpenWebView(void* pParent, float x, float y, float w, float h, float scale, bool enableDevTools)
 {  
   
-  if(mWKWebView != nullptr){
-    //SetWebViewBounds(x, y, w, h, scale);
-    return mWKWebView;
-  }
-  
-  //WKWebViewConfiguration* webConfig = [[WKWebViewConfiguration alloc] init];
-  //WKPreferences* preferences = [[WKPreferences alloc] init];
-  
   WKWebViewConfiguration* webConfig = [WKWebViewConfiguration new];
   WKPreferences* preferences = [WKPreferences new];
   
-  //WKUserContentController* controller = [[WKUserContentController alloc] init];
   WKUserContentController* controller = [WKUserContentController new];
   webConfig.userContentController = controller;
 
