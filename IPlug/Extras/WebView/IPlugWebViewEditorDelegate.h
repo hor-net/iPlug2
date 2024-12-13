@@ -174,17 +174,6 @@ public:
                        json["dataByte2"].get<uint8_t>()};
       SendMidiMsgFromUI(msg);
     }
-  #ifdef OS_WIN
-    else if (json["msg"] == "keypress")
-    {
-      if (json["data"].is_number_integer())
-      {
-        if (json["data"] == 32) { // spacebar
-          PostMessage(mParentWnd, WM_KEYDOWN, VK_SPACE, 0);
-        }
-      }
-    }
-   #endif
   }
 
   void Resize(int width, int height);
@@ -235,12 +224,18 @@ public:
   void LoadIndexHtml(const char* pathOfPluginSrc, const char* bundleid)
   {
 #if !defined OS_IOS && defined _DEBUG
-    namespace fs = std::filesystem;
-    
-    fs::path mainPath(pathOfPluginSrc);
-    fs::path indexRelativePath = mainPath.parent_path() / "Resources" / "web" / "index.html";
-  
-    LoadFile(indexRelativePath.string().c_str(), nullptr);
+    std::string indexRelativePath = pathOfPluginSrc;
+    std::replace(indexRelativePath.begin(), indexRelativePath.end(), '\\', '/');
+    auto found = indexRelativePath.find_last_of('/');
+    if (found != std::string::npos)
+    {
+      indexRelativePath = indexRelativePath.substr(0, found);
+      indexRelativePath.append("/Resources/web/index.html");
+#ifdef OS_WIN
+      std::replace(indexRelativePath.begin(), indexRelativePath.end(), '/', '\\');
+#endif
+      LoadFile(indexRelativePath.c_str(), nullptr);
+    }
 #else
     LoadFile("index.html", bundleid); // TODO: make this work for windows
 #endif
