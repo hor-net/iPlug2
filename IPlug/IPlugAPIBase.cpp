@@ -90,7 +90,6 @@ bool IPlugAPIBase::CompareState(const uint8_t* pIncomingState, int startPos) con
 
 bool IPlugAPIBase::EditorResizeFromUI(int viewWidth, int viewHeight, bool needsPlatformResize)
 {
-  //if (needsPlatformResize && !GetHostResizeEnabled())
   if (needsPlatformResize)
     return EditorResize(viewWidth, viewHeight);
   else
