@@ -121,6 +121,7 @@ LIB_SKPARAGRAPH = $(BUILT_LIBS_LIB_PATH)/libskparagraph.a
 LIB_SKUNICODE = $(BUILT_LIBS_LIB_PATH)/libskunicode_core.a $(BUILT_LIBS_LIB_PATH)/libskunicode_icu.a
 LIB_SVG = $(BUILT_LIBS_LIB_PATH)/libsvg.a
 //LIB_YOGA = $(BUILT_LIBS_LIB_PATH)/libyoga.a
+LIB_ARA = $(DEPS_PATH)/IPlug/ARA_SDK/ARA_Library/
 
 
 //YOGA_LNK_FLAGS = $(LIB_YOGA)
