@@ -34,6 +34,7 @@
 #include <wininet.h>
 #include <shlobj.h>
 #include <cassert>
+#include <vector>
 
 #include <wrl.h>
 #include <wil/com.h>
@@ -112,7 +113,7 @@ IWebViewImpl::~IWebViewImpl()
 void* IWebViewImpl::OpenWebView(void* pParent, float x, float y, float w, float h, float scale)
 {
   mParentWnd = (HWND)pParent;
-  SetWebViewBounds(x, y, w, h, 1.);
+  SetWebViewBounds(x, y, w, h, scale);
 
   WDL_String cachePath;
   WebViewCachePath(cachePath);
@@ -424,7 +425,7 @@ void IWebViewImpl::LoadFile(const char* fileName, const char* bundleID)
 {
   if (mCoreWebView)
   {
-    /*wil::com_ptr<ICoreWebView2_3> webView3 = mCoreWebView.try_query<ICoreWebView2_3>();
+    wil::com_ptr<ICoreWebView2_3> webView3 = mCoreWebView.try_query<ICoreWebView2_3>();
     if (webView3)
     {
       WDL_String webFolder{fileName};
@@ -435,7 +436,7 @@ void IWebViewImpl::LoadFile(const char* fileName, const char* bundleID)
 
       webView3->SetVirtualHostNameToFolderMapping(
         L"iplug.example", webFolderWide.data(), COREWEBVIEW2_HOST_RESOURCE_ACCESS_KIND_DENY_CORS);
-    }*/
+    }
 
     WDL_String baseName{fileName};
     WDL_String root{fileName};
@@ -443,9 +444,9 @@ void IWebViewImpl::LoadFile(const char* fileName, const char* bundleID)
     mWebRoot.Set(root.Get());
 
     WDL_String fullStr;
-    //fullStr.SetFormatted(2048, "https://iplug.example/%s", baseName.get_filepart());
+    fullStr.SetFormatted(2048, "https://iplug.example/%s", baseName.get_filepart());
     //fullStr.SetFormatted(2048, useCustomUrlScheme ? "iplug://%s" : "file://%s", fileName);
-    fullStr.SetFormatted(2048, "file://%s", fileName);
+    //fullStr.SetFormatted(2048, "file://%s", fileName);
     int bufSize = UTF8ToUTF16Len(fullStr.Get());
    // std::vector<WCHAR> fileUrlWide(bufSize);
     WCHAR fileUrlWide[2048];
@@ -497,11 +498,12 @@ void IWebViewImpl::EnableInteraction(bool enable)
 
 void IWebViewImpl::SetWebViewBounds(float x, float y, float w, float h, float scale)
 {
-  mWebViewBounds = GetScaledRect(x, y, w, h, GetScaleForHWND(mParentWnd));
+  //mWebViewBounds = GetScaledRect(x, y, w, h, GetScaleForHWND(mParentWnd));
+  mWebViewBounds = GetScaledRect(x, y, w, h, 1);
 
   if (mWebViewCtrlr)
   {
-    mWebViewCtrlr->SetBoundsAndZoomFactor(mWebViewBounds, scale);
+    mWebViewCtrlr->SetBoundsAndZoomFactor(mWebViewBounds, 1);
   }
 }
 

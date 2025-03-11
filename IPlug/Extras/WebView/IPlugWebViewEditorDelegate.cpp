@@ -49,23 +49,27 @@ WebViewEditorDelegate::~WebViewEditorDelegate()
 
 void* WebViewEditorDelegate::OpenWindow(void* pParent)
 {
-  mParentWnd = (HWND)pParent;
+  mScale = GetScaleForHWND((HWND)pParent);
 
-  float width = GetEditorWidth();
-  float height = GetEditorHeight();
+  float width = GetEditorWidth() * mScale;
+  float height = GetEditorHeight() * mScale;
 
-  return OpenWebView(pParent, 0., 0., static_cast<float>(width), static_cast<float>(height), 1.);
+  //if (scale > 1.)
+  //  EditorResizeFromUI(width, height, true);
+
+  return OpenWebView(pParent, 0., 0., static_cast<float>(width), static_cast<float>(height), mScale);
 }
 
 void WebViewEditorDelegate::Resize(int width, int height)
 {
-  auto scale = GetScaleForHWND((HWND)mParentWnd);
-  SetWebViewBounds(0, 0, static_cast<float>(width/scale), static_cast<float>(height/scale));
-  EditorResizeFromUI(width/scale, height/scale, true);
+  //width /= mScale;
+  //height /= mScale;
+  SetWebViewBounds(0, 0, static_cast<float>(width), static_cast<float>(height), mScale);
+  EditorResizeFromUI(width, height, true);
 }
 
 void WebViewEditorDelegate::OnParentWindowResize(int width, int height)
 {
-  SetWebViewBounds(0, 0, static_cast<float>(width), static_cast<float>(height));
+  SetWebViewBounds(0, 0, static_cast<float>(width), static_cast<float>(height), mScale);
   EditorResizeFromUI(width, height, false);
 }

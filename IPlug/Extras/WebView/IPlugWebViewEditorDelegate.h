@@ -254,6 +254,7 @@ private:
 
 #if defined OS_WIN
   HWND mParentWnd = NULL;
+  float mScale = 1.;
 #endif
 
 #if defined OS_MAC || defined OS_IOS
