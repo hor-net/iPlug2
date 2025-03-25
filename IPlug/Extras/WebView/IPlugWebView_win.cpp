@@ -159,7 +159,7 @@ void* IWebViewImpl::OpenWebView(void* pParent, float x, float y, float w, float 
             Settings->put_AreDefaultContextMenusEnabled(enableDevTools);
             Settings->put_AreDevToolsEnabled(enableDevTools);
 
-            // this script adds a function IPlugSendMsg that is used to call the platform webview messaging function in JS
+            // this script adds a function IPlugSendMsg that is used to communicate from the WebView to the C++ side
             mCoreWebView->AddScriptToExecuteOnDocumentCreated(
               L"function IPlugSendMsg(m) {window.chrome.webview.postMessage(m)};",
               Callback<ICoreWebView2AddScriptToExecuteOnDocumentCreatedCompletedHandler>([this](HRESULT error,
@@ -167,11 +167,15 @@ void* IWebViewImpl::OpenWebView(void* pParent, float x, float y, float w, float 
                 return S_OK;
               }).Get());
 
-                        // this script captures the spacebar key press and forward it to the host app
+            // this script receives global key down events and forwards them to the C++ side
             mCoreWebView->AddScriptToExecuteOnDocumentCreated(
-              L"document.addEventListener('keydown', function(e) { if(e.keyCode == 32 && document.activeElement.type != \"text\") { IPlugSendMsg('kp32'); }});",
+              L"document.addEventListener('keydown', function(e) { if(document.activeElement.type != \"text\") { IPlugSendMsg({'msg': 'SKPFUI', 'keyCode': e.keyCode, 'utf8': e.key, 'S': e.shiftKey, 'C': e.ctrlKey, 'A': e.altKey, 'isUp': false}); }});",
               Callback<ICoreWebView2AddScriptToExecuteOnDocumentCreatedCompletedHandler>([this](HRESULT error, PCWSTR id) -> HRESULT { return S_OK; }).Get());
 
+            // this script receives global key up events and forwards them to the C++ side
+            mCoreWebView->AddScriptToExecuteOnDocumentCreated(
+              L"document.addEventListener('keyup', function(e) { if(document.activeElement.type != \"text\") { IPlugSendMsg({'msg': 'SKPFUI', 'keyCode': e.keyCode, 'utf8': e.key, 'S': e.shiftKey, 'C': e.ctrlKey, 'A': e.altKey, 'isUp': true}); }});",
+              Callback<ICoreWebView2AddScriptToExecuteOnDocumentCreatedCompletedHandler>([this](HRESULT error, PCWSTR id) -> HRESULT { return S_OK; }).Get());
 
             mCoreWebView->add_WebMessageReceived(
               Callback<ICoreWebView2WebMessageReceivedEventHandler>([this](

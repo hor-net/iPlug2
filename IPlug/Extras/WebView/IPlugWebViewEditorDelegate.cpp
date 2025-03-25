@@ -73,3 +73,21 @@ void WebViewEditorDelegate::OnParentWindowResize(int width, int height)
   SetWebViewBounds(0, 0, static_cast<float>(width), static_cast<float>(height), mScale);
   EditorResizeFromUI(width, height, false);
 }
+
+bool WebViewEditorDelegate::OnKeyDown(const IKeyPress& key)
+{
+  #ifdef OS_WIN
+  if (key.VK == VK_SPACE)
+  {
+    PostMessage((HWND)mView, WM_KEYDOWN, VK_SPACE, 0);
+    return true;
+  }
+  #endif
+  return false;
+}
+
+bool WebViewEditorDelegate::OnKeyUp(const IKeyPress& key)
+{
+
+  return true;
+}
