@@ -114,6 +114,7 @@ void* IWebViewImpl::OpenWebView(void* pParent, float x, float y, float w, float 
   if (mIWebView->GetEnableDevTools())
   {
     [preferences setValue:@YES forKey:@"developerExtrasEnabled"];
+    
   }
   
   [preferences setValue:@YES forKey:@"DOMPasteAllowed"];
@@ -147,17 +148,17 @@ void* IWebViewImpl::OpenWebView(void* pParent, float x, float y, float w, float 
                              forMainFrameOnly:YES]];
   
   // this script receives global key down events and forwards them to the C++ side
-  [controller addUserScript:[[WKUserScript alloc] initWithSource:
-                             @"document.addEventListener('keydown', function(e) { if(document.activeElement.type != \"text\") { IPlugSendMsg({'msg': 'SKPFUI', 'keyCode': e.keyCode, 'utf8': e.key, 'S': e.shiftKey, 'C': e.ctrlKey, 'A': e.altKey, 'isUp': false}); e.preventDefault(); }});"
-                             injectionTime:WKUserScriptInjectionTimeAtDocumentStart
-                             forMainFrameOnly:YES]];
-  
-  // this script receives global key up events and forwards them to the C++ side
-  [controller addUserScript:[[WKUserScript alloc] initWithSource:
-                             @"document.addEventListener('keyup', function(e) { if(document.activeElement.type != \"text\") { IPlugSendMsg({'msg': 'SKPFUI', 'keyCode': e.keyCode, 'utf8': e.key, 'S': e.shiftKey, 'C': e.ctrlKey, 'A': e.altKey, 'isUp': true}); e.preventDefault(); }});"
-                             injectionTime:WKUserScriptInjectionTimeAtDocumentStart
-                             forMainFrameOnly:YES]];
-  
+//  [controller addUserScript:[[WKUserScript alloc] initWithSource:
+//                             @"document.addEventListener('keydown', function(e) { if(document.activeElement.type != \"text\" || e.code != 'Space' ) { IPlugSendMsg({'msg': 'SKPFUI', 'keyCode': e.keyCode, 'utf8': e.key, 'S': e.shiftKey, 'C': e.ctrlKey, 'A': e.altKey, 'isUp': false}); e.preventDefault(); }});"
+//                             injectionTime:WKUserScriptInjectionTimeAtDocumentStart
+//                             forMainFrameOnly:YES]];
+//  
+//  // this script receives global key up events and forwards them to the C++ side
+//  [controller addUserScript:[[WKUserScript alloc] initWithSource:
+//                             @"document.addEventListener('keyup', function(e) { if(document.activeElement.type != \"text\" || e.code != 'Space' ) { IPlugSendMsg({'msg': 'SKPFUI', 'keyCode': e.keyCode, 'utf8': e.key, 'S': e.shiftKey, 'C': e.ctrlKey, 'A': e.altKey, 'isUp': true}); e.preventDefault(); }});"
+//                             injectionTime:WKUserScriptInjectionTimeAtDocumentStart
+//                             forMainFrameOnly:YES]];
+//  
   IPLUG_WKWEBVIEW* wkWebView = [[IPLUG_WKWEBVIEW alloc] initWithFrame: CGRectMake(x, y, w, h) configuration:webConfig];
   
   const auto isTransparent = !mIWebView->IsOpaque();
