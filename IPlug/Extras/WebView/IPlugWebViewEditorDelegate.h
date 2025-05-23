@@ -142,11 +142,16 @@ public:
     } catch (nlohmann::json::exception& e) {
       return;
     }
-    
+
     if (json["msg"] == "SPVFUI")
     {
       assert(json["paramIdx"] > -1);
-      SendParameterValueFromUI(json["paramIdx"], json["value"]);
+      try {
+        SendParameterValueFromUI(json["paramIdx"], json["value"]);
+      } catch (nlohmann::json::exception& e) {
+        return;
+      }  
+      
     }
     else if (json["msg"] == "BPCFUI")
     {
