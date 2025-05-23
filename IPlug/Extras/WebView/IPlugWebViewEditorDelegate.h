@@ -270,6 +270,7 @@ private:
 #if defined OS_WIN
   HWND mParentWnd = NULL;
   float mScale = 1.;
+  bool mNeedsWindowRescale = true;
 #endif
 
 #if defined OS_MAC || defined OS_IOS
