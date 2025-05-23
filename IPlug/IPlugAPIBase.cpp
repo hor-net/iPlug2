@@ -143,6 +143,13 @@ void IPlugAPIBase::OnTimer(Timer& t)
 {
   if(HasUI())
   {
+    while(mParamChangeFromProcessor.ElementsAvailable())
+    {
+      ParamTuple p;
+      mParamChangeFromProcessor.Pop(p);
+      SendParameterValueFromDelegate(p.idx, p.value, false);
+    }
+    
 // VST3 ********************************************************************************
 #if defined VST3P_API || defined VST3_API
     while (mMidiMsgsFromProcessor.ElementsAvailable())
@@ -168,12 +175,7 @@ void IPlugAPIBase::OnTimer(Timer& t)
     }
 // !VST3 ******************************************************************************
 #else
-    while(mParamChangeFromProcessor.ElementsAvailable())
-    {
-      ParamTuple p;
-      mParamChangeFromProcessor.Pop(p);
-      SendParameterValueFromDelegate(p.idx, p.value, false);
-    }
+    
     
     while (mMidiMsgsFromProcessor.ElementsAvailable())
     {
