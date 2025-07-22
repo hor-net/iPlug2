@@ -1,4 +1,4 @@
- /*
+/*
  ==============================================================================
  
   MIT License
@@ -169,6 +169,14 @@ void* IWebViewImpl::OpenWebView(void* pParent, float x, float y, float w, float 
     wkWebView.backgroundColor = [UIColor clearColor];
     wkWebView.scrollView.backgroundColor = [UIColor clearColor];
     wkWebView.opaque = NO;
+  }
+  
+  // Aggiungi questa configurazione per l'ispezione iOS
+  if (mIWebView->GetEnableDevTools())
+  {
+    if (@available(iOS 16.4, *)) {
+      wkWebView.inspectable = YES;
+    }
   }
 #endif
 

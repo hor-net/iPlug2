@@ -1,4 +1,4 @@
- /*
+/*
  ==============================================================================
  
  This file is part of the iPlug 2 library. Copyright (C) the iPlug 2 developers.
@@ -171,17 +171,22 @@ void* IWebView::OpenWebView(void* pParent, float x, float y, float w, float h, f
 
   IPLUG_WKSCRIPTHANDLER* scriptHandler = [[IPLUG_WKSCRIPTHANDLER alloc] initWithIWebView: this];
   [controller addScriptMessageHandler: scriptHandler name:@"callback"];
-#ifdef _DEBUG
-  [preferences setValue:@YES forKey:@"developerExtrasEnabled"];
-#endif
+  
+  // Configurazioni base
   [preferences setValue:@TRUE forKey:@"allowFileAccessFromFileURLs"];
   [preferences setValue:@YES forKey:@"DOMPasteAllowed"];
   [preferences setValue:@YES forKey:@"javaScriptCanAccessClipboard"];
+  
 #ifdef OS_MAC
   [preferences setValue:@YES forKey:@"universalAccessFromFileURLsAllowed"];
   [preferences setValue:@NO forKey:@"webSecurityEnabled"];
   [preferences setValue:@YES forKey:@"canvasUsesAcceleratedDrawing"];
 #endif
+
+#ifdef _DEBUG
+  [preferences setValue:@YES forKey:@"developerExtrasEnabled"];
+#endif
+
   webConfig.preferences = preferences;
   
 #ifdef OS_IOS
