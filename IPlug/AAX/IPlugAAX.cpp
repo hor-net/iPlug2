@@ -323,7 +323,7 @@ void IPlugAAX::RenderAudio(AAX_SIPlugRenderInfo* pRenderInfo, const TParamValPai
     AttachBuffers(ERoute::kOutput, 0, maxNOutChans, pRenderInfo->mAudioOutputs, numSamples);
   }
   
-  if (bypass) 
+  if (bypass || GetBypassed()) 
     PassThroughBuffers(0.0f, numSamples);
   else 
   {
