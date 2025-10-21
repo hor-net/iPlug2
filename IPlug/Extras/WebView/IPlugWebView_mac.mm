@@ -147,6 +147,15 @@ void* IWebViewImpl::OpenWebView(void* pParent, float x, float y, float w, float 
                              injectionTime:WKUserScriptInjectionTimeAtDocumentEnd
                              forMainFrameOnly:YES]];
   
+  // this script waits for DOMContentLoaded and then notifies C++ that JavaScript is ready
+  [controller addUserScript:[[WKUserScript alloc] initWithSource:
+                             @"window.addEventListener('load', setTimeout(function() { \
+                                console.log(\"sending JSREADY\"); \
+                                IPlugSendMsg({'msg': 'JSREADY'}) \
+                              }, 100));"
+                             injectionTime:WKUserScriptInjectionTimeAtDocumentStart
+                             forMainFrameOnly:YES]];
+  
   // this script receives global key down events and forwards them to the C++ side
 //  [controller addUserScript:[[WKUserScript alloc] initWithSource:
 //                             @"document.addEventListener('keydown', function(e) { if(document.activeElement.type != \"text\" || e.code != 'Space' ) { IPlugSendMsg({'msg': 'SKPFUI', 'keyCode': e.keyCode, 'utf8': e.key, 'S': e.shiftKey, 'C': e.ctrlKey, 'A': e.altKey, 'isUp': false}); e.preventDefault(); }});"

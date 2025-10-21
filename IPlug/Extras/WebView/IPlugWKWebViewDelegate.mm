@@ -1,4 +1,4 @@
- /*
+/*
  ==============================================================================
  
   MIT License
@@ -105,7 +105,9 @@ NS_ASSUME_NONNULL_BEGIN
 
 - (void) webView:(IPLUG_WKWEBVIEW*) webView didFinishNavigation:(WKNavigation*) navigation
 {
-  mIWebView->OnWebContentLoaded();
+  // OnWebContentLoaded() is now called when we receive the JSREADY message from JavaScript
+  // This ensures that the DOM and all JavaScript are fully ready before processing messages
+  printf("didFinishNavigation called - waiting for JSREADY message from JavaScript\n");
 }
 
 - (void)download:(WKDownload*)download decideDestinationUsingResponse:(NSURLResponse*)response suggestedFilename:(NSString*)filename completionHandler:(void (^_Nonnull)(NSURL* _Nullable))completionHandler API_AVAILABLE(macos(11.3), ios(14.5))

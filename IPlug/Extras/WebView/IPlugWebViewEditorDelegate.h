@@ -1,4 +1,4 @@
- /*
+/*
  ==============================================================================
  
   MIT License
@@ -39,6 +39,9 @@
 #include "json.hpp"
 #include <functional>
 #include <filesystem>
+#include <queue>
+#include <mutex>
+#include <string>
 
 /**
  * @file
@@ -80,7 +83,7 @@ public:
   {
     WDL_String str;
     str.SetFormatted(mMaxJSStringLength, "SCVFD(%i, %f)", ctrlTag, normalizedValue);
-    EvaluateJavaScript(str.Get());
+    QueueJavaScript(str.Get());
   }
 
   void SendControlMsgFromDelegate(int ctrlTag, int msgTag, int dataSize, const void* pData) override
@@ -90,7 +93,7 @@ public:
     base64.resize(B64ENCODE_OUT_SAFESIZE(dataSize));
     wdl_base64encode(reinterpret_cast<const unsigned char*>(pData), base64.data(), dataSize);
     str.SetFormatted(mMaxJSStringLength, "SCMFD(%i, %i, %i, \"%s\")", ctrlTag, msgTag, base64.size(), base64.data());
-    EvaluateJavaScript(str.Get());
+    QueueJavaScript(str.Get());
   }
 
   void SendParameterValueFromDelegate(int paramIdx, double value, bool normalized) override
@@ -103,7 +106,7 @@ public:
     }
     
     str.SetFormatted(mMaxJSStringLength, "SPVFD(%i, %f)", paramIdx, value);
-    EvaluateJavaScript(str.Get());
+    QueueJavaScript(str.Get());
   }
 
   void SendArbitraryMsgFromDelegate(int msgTag, int dataSize, const void* pData) override
@@ -113,7 +116,7 @@ public:
     base64.resize(B64ENCODE_OUT_SAFESIZE(dataSize));
     wdl_base64encode(reinterpret_cast<const unsigned char*>(pData), base64.data(), dataSize);
     str.SetFormatted(mMaxJSStringLength, "SAMFD(%i, %lu, \"%s\")", msgTag, base64.size(), base64.data());
-    EvaluateJavaScript(str.Get());
+    QueueJavaScript(str.Get());
     
   }
   
@@ -121,7 +124,7 @@ public:
   {
     WDL_String str;
     str.SetFormatted(mMaxJSStringLength, "SMMFD(%i, %i, %i)", msg.mStatus, msg.mData1, msg.mData2);
-    EvaluateJavaScript(str.Get());
+    QueueJavaScript(str.Get());
   }
   
   bool OnKeyDown(const IKeyPress& key) override;
@@ -189,6 +192,11 @@ public:
       IKeyPress keyPress = ConvertToIKeyPress(json["keyCode"].get<uint32_t>(), json["utf8"].get<std::string>().c_str(), json["S"].get<bool>(), json["C"].get<bool>(), json["A"].get<bool>());
       json["isUp"].get<bool>() ? OnKeyUp(keyPress) : OnKeyDown(keyPress); // return value not used
     }
+    else if(json["msg"] == "JSREADY")
+    {
+      printf("Received JSREADY message from JavaScript - DOM is ready!\n");
+      OnWebContentLoaded();
+    }
   }
 
   void Resize(int width, int height);
@@ -205,8 +213,13 @@ public:
   
   void OnWebContentLoaded() override
   {
-    nlohmann::json msg;
+    printf("OnWebContentLoaded called!\n");
     
+    mWebViewReady = true;
+    printf("WebView is now ready!\n");
+    
+    // Now prepare and send the params message (this will execute immediately since mWebViewReady is now true)
+    nlohmann::json msg;
     msg["id"] = "params";
     std::vector<nlohmann::json> params;
     for (int idx = 0; idx < NParams(); idx++)
@@ -219,7 +232,12 @@ public:
     }
     msg["params"] = params;
 
+    // Send params using the correct mechanism (SendJSONFromDelegate -> SendArbitraryMsgFromDelegate with -1)
+    printf("Sending params via SendJSONFromDelegate\n");
     SendJSONFromDelegate(msg);
+    
+    // First flush all queued JavaScript messages and set mWebViewReady = true
+    FlushJavaScriptQueue();
     
     OnUIOpen();
   }
@@ -228,6 +246,10 @@ public:
   {
     mMaxJSStringLength = length;
   }
+  
+  // JavaScript message queue system for macOS timing fix
+  void QueueJavaScript(const char* scriptStr);
+  void FlushJavaScriptQueue();
 
   /** Load index.html (from plugin src dir in debug builds, and from bundle in release builds) on desktop
    * Note: if your debug build is code-signed with the hardened runtime It won't be able to load the file outside it's sandbox, and this
@@ -260,6 +282,11 @@ protected:
   int mMaxJSStringLength = kDefaultMaxJSStringLength;
   std::function<void()> mEditorInitFunc = nullptr;
   void* mView = nullptr;
+  
+  // JavaScript message queue system for macOS timing fix
+  std::queue<std::string> mJavaScriptQueue;
+  bool mWebViewReady = false;
+  std::mutex mQueueMutex;
   
 private:
   IKeyPress ConvertToIKeyPress(uint32_t keyCode, const char* utf8, bool shift, bool ctrl, bool alt)

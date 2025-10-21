@@ -145,7 +145,9 @@ using namespace iplug;
 
 - (void) webView:(IPLUG_WKWEBVIEW*) webView didFinishNavigation:(WKNavigation*) navigation
 {
-  mWebView->OnWebContentLoaded();
+  // OnWebContentLoaded() is now called when we receive the JSREADY message from JavaScript
+  // This ensures that the DOM and all JavaScript are fully ready before processing messages
+  printf("didFinishNavigation called - waiting for JSREADY message from JavaScript\n");
 }
 
 @end
@@ -215,6 +217,21 @@ void* IWebView::OpenWebView(void* pParent, float x, float y, float w, float h, f
   [controller addUserScript:script3];
   
 #endif
+
+  // this script waits for DOMContentLoaded and then notifies C++ that JavaScript is ready
+  WKUserScript* script4 = [[WKUserScript alloc] initWithSource:
+                           @"function notifyJavaScriptReady() { \
+                               console.log('JavaScript is ready, notifying C++'); \
+                               IPlugSendMsg({'msg': 'JSREADY'}); \
+                             } \
+                             if (document.readyState === 'loading') { \
+                               document.addEventListener('DOMContentLoaded', notifyJavaScriptReady); \
+                             } else { \
+                               notifyJavaScriptReady(); \
+                             }"
+                           injectionTime:WKUserScriptInjectionTimeAtDocumentEnd
+                           forMainFrameOnly:YES];
+  [controller addUserScript:script4];
   
   WKWebView* webView = [[WKWebView alloc] initWithFrame: MAKERECT(x, y, w, h) configuration:webConfig];
   

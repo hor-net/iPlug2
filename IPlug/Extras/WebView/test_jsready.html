@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test JSREADY Logic</title>
+</head>
+<body>
+    <h1>Test JSREADY Logic</h1>
+    <div id="status">Loading...</div>
+    <div id="log"></div>
+
+    <script>
+        // Mock IPlugSendMsg function for testing
+        function IPlugSendMsg(message) {
+            console.log('IPlugSendMsg called with:', message);
+            document.getElementById('log').innerHTML += '<p>Message sent: ' + JSON.stringify(message) + '</p>';
+        }
+
+        // Our JSREADY script logic
+        function notifyJavaScriptReady() {
+            console.log('JavaScript is ready, notifying C++');
+            document.getElementById('status').innerHTML = 'JavaScript Ready!';
+            IPlugSendMsg({'msg': 'JSREADY'});
+        }
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', notifyJavaScriptReady);
+        } else {
+            notifyJavaScriptReady();
+        }
+
+        // Test that this runs after JSREADY
+        setTimeout(() => {
+            document.getElementById('log').innerHTML += '<p>This should run after JSREADY</p>';
+        }, 100);
+    </script>
+</body>
+</html>
