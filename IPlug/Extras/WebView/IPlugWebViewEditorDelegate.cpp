@@ -51,8 +51,37 @@ void* WebViewEditorDelegate::OpenWindow(void* pParent)
 {
   mScale = GetScaleForHWND((HWND)pParent);
 
-  float width = GetEditorWidth() * mScale;
-  float height = GetEditorHeight() * mScale;
+  // Check if editor dimensions are already scaled by comparing ratio to mScale
+  // If GetEditorWidth() / previousWidth ≈ mScale, then dimensions are already scaled
+  int editorWidth = GetEditorWidth();
+  int editorHeight = GetEditorHeight();
+  
+  // Detect if already scaled: if ratio of consecutive opens ≈ mScale, it means host is giving scaled values
+  static int sLastEditorWidth = 0;
+  static int sLastEditorHeight = 0;
+  
+  float width, height;
+  if (sLastEditorWidth > 0 && editorWidth > 0) {
+    float widthRatio = (float)editorWidth / (float)sLastEditorWidth;
+    float heightRatio = (float)editorHeight / (float)sLastEditorHeight;
+    // If ratios are approximately equal to mScale, dimensions are already scaled
+    if (fabs(widthRatio - mScale) < 0.1 && fabs(heightRatio - mScale) < 0.1) {
+      // Already scaled by host, use unscaled values
+      width = (float)editorWidth / mScale;
+      height = (float)editorHeight / mScale;
+    } else {
+      // Not yet scaled, apply scale
+      width = (float)editorWidth * mScale;
+      height = (float)editorHeight * mScale;
+    }
+  } else {
+    // First time, apply scale
+    width = (float)editorWidth * mScale;
+    height = (float)editorHeight * mScale;
+  }
+  
+  sLastEditorWidth = (int)width;
+  sLastEditorHeight = (int)height;
 
   if (mNeedsWindowRescale)
   {
@@ -66,8 +95,8 @@ void* WebViewEditorDelegate::OpenWindow(void* pParent)
 
 void WebViewEditorDelegate::Resize(int width, int height)
 {
-  width *= mScale;
-  height *= mScale;
+  // Note: dimensions from JavaScript are already in webview pixel space (scaled),
+  // so we should NOT multiply by mScale again
   SetWebViewBounds(0, 0, static_cast<float>(width), static_cast<float>(height), 1);
   EditorResizeFromUI(width, height, true);
 }
