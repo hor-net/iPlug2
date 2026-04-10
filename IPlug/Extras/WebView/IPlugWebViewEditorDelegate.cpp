@@ -50,9 +50,16 @@ WebViewEditorDelegate::~WebViewEditorDelegate()
 void* WebViewEditorDelegate::OpenWindow(void* pParent)
 {
   mScale = GetScaleForHWND((HWND)pParent);
+  int editorW = GetEditorWidth();
+  int editorH = GetEditorHeight();
 
-  float width = GetEditorWidth() * mScale;
-  float height = GetEditorHeight() * mScale;
+  float width = (float)editorW * mScale;
+  float height = (float)editorH * mScale;
+
+  // DEBUG: Log zoom tracking
+  char buf[512];
+  sprintf(buf, "[iPlug] OpenWindow - editor: %dx%d, mScale: %.2f, final: %.0fx%.0f\n", editorW, editorH, mScale, width, height);
+  OutputDebugStringA(buf);
 
   if (mNeedsWindowRescale)
   {
@@ -66,8 +73,16 @@ void* WebViewEditorDelegate::OpenWindow(void* pParent)
 
 void WebViewEditorDelegate::Resize(int width, int height)
 {
+  // DEBUG
+  char buf[256];
+  sprintf(buf, "[iPlug] Resize - input: %dx%d, mScale: %.2f\n", width, height, mScale);
+  OutputDebugStringA(buf);
+  
   width *= mScale;
   height *= mScale;
+  sprintf(buf, "[iPlug] Resize - after scale: %dx%d\n", width, height);
+  OutputDebugStringA(buf);
+  
   SetWebViewBounds(0, 0, static_cast<float>(width), static_cast<float>(height), 1);
   EditorResizeFromUI(width, height, true);
 }

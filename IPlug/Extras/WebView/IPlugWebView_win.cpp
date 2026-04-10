@@ -506,11 +506,19 @@ void IWebViewImpl::EnableInteraction(bool enable)
 
 void IWebViewImpl::SetWebViewBounds(float x, float y, float w, float h, float scale)
 {
+  // DEBUG
+  char buf[256];
+  sprintf(buf, "[iPlug] SetWebViewBounds - input: %.0fx%.0f, scale param: %.2f\n", w, h, scale);
+  OutputDebugStringA(buf);
+  
   //mWebViewBounds = GetScaledRect(x, y, w, h, GetScaleForHWND(mParentWnd));
   mWebViewBounds = GetScaledRect(x, y, w, h, 1);
 
   if (mWebViewCtrlr)
   {
+    sprintf(buf, "[iPlug] SetBoundsAndZoomFactor - bounds: %.0fx%.0f, zoom: 1\n", 
+            mWebViewBounds.Width(), mWebViewBounds.Height());
+    OutputDebugStringA(buf);
     mWebViewCtrlr->SetBoundsAndZoomFactor(mWebViewBounds, 1);
   }
 }
