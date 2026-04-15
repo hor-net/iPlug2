@@ -131,8 +131,11 @@ int IPluginBase::UnserializeParams(const IByteChunk& chunk, int startPos)
     IParam* pParam = mParams.Get(i);
     double v = 0.0;
     pos = chunk.Get(&v, pos);
-    pParam->Set(v);
-    Trace(TRACELOC, "%d %s %f", i, pParam->GetName(), pParam->Value());
+    if (pos >= 0)
+    {
+      pParam->Set(v);
+      Trace(TRACELOC, "%d %s %f", i, pParam->GetName(), pParam->Value());
+    }
   }
 
   OnParamReset(kPresetRecall);
@@ -542,7 +545,7 @@ void IPluginBase::DumpMakePresetSrc(const char* filename) const
   {
     sDumped = true;
     int i, n = NParams();
-    FILE* fp = fopenUTF8(filename, "a");
+    FILE* fp = fopen(filename, "a");
     
     if (!fp)
       return;
@@ -586,7 +589,7 @@ void IPluginBase::DumpMakePresetFromNamedParamsSrc(const char* filename, const c
   {
     sDumped = true;
     int i, n = NParams();
-    FILE* fp = fopenUTF8(filename, "a");
+    FILE* fp = fopen(filename, "a");
     
     if (!fp)
       return;
@@ -623,7 +626,7 @@ void IPluginBase::DumpMakePresetFromNamedParamsSrc(const char* filename, const c
 
 void IPluginBase::DumpPresetBlob(const char* filename) const
 {
-  FILE* fp = fopenUTF8(filename, "a");
+  FILE* fp = fopen(filename, "a");
   
   if (!fp)
     return;
@@ -650,9 +653,7 @@ bool IPluginBase::SavePresetAsFXP(const char* file) const
 {
   if (CStringHasContents(file))
   {
-    errno = 0;
     FILE* fp = fopenUTF8(file, "wb");
-    if(fp==NULL) printf("Error %d \n", errno);
     
     IByteChunk pgm;
     
@@ -725,7 +726,7 @@ bool IPluginBase::SaveBankAsFXB(const char* file) const
 {
   if (CStringHasContents(file))
   {
-    FILE* fp = fopenUTF8(file, "wb");
+    FILE* fp = fopen(file, "wb");
     
     IByteChunk bnk;
     
@@ -830,7 +831,7 @@ bool IPluginBase::LoadPresetFromFXP(const char* file)
 {
   if (CStringHasContents(file))
   {
-    FILE* fp = fopenUTF8(file, "rb");
+    FILE* fp = fopen(file, "rb");
     
     if (fp)
     {
@@ -921,7 +922,7 @@ bool IPluginBase::LoadBankFromFXB(const char* file)
 {
   if (CStringHasContents(file))
   {
-    FILE* fp = fopenUTF8(file, "rb");
+    FILE* fp = fopen(file, "rb");
     
     if (fp)
     {

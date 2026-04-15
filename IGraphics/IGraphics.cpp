@@ -440,7 +440,12 @@ void IGraphics::ShowFPSDisplay(bool enable)
   {
     if (!mPerfDisplay)
     {
-      mPerfDisplay = std::make_unique<IFPSDisplayControl>(GetBounds().GetPadded(-10).GetFromTLHC(200, 50));
+      if (mPerfDisplayBounds.Empty())
+      {
+        mPerfDisplayBounds = GetBounds().GetPadded(-10).GetFromTLHC(200, 50);
+      }
+      
+      mPerfDisplay = std::make_unique<IFPSDisplayControl>(mPerfDisplayBounds);
       mPerfDisplay->SetDelegate(*GetDelegate());
     }
   }
@@ -1228,11 +1233,14 @@ bool IGraphics::OnMouseDblClick(float x, float y, const IMouseMod& mod)
   return pControl;
 }
 
-void IGraphics::OnMouseWheel(float x, float y, const IMouseMod& mod, float d)
+bool IGraphics::OnMouseWheel(float x, float y, const IMouseMod& mod, float d)
 {
   IControl* pControl = GetMouseControl(x, y, false);
+  
   if (pControl)
     pControl->OnMouseWheel(x, y, mod, d);
+  
+  return pControl;
 }
 
 bool IGraphics::OnKeyDown(float x, float y, const IKeyPress& key)
@@ -1694,7 +1702,7 @@ WDL_TypedBuf<uint8_t> IGraphics::LoadResource(const char* fileNameOrResID, const
 #endif
   if (resourceFound == EResourceLocation::kAbsolutePath)
   {
-    FILE* fd = fopenUTF8(path.Get(), "rb");
+    FILE* fd = fopen(path.Get(), "rb");
 
     if (!fd)
       return result;
@@ -1990,6 +1998,8 @@ void IGraphics::EndDragResize()
     ForAllControls(&IControl::OnRescale);
     SetAllControlsDirty();
   }
+  else if (mCornerResizer)
+    mCornerResizer->SetDirty(false);
 }
 
 void IGraphics::StartLayer(IControl* pControl, const IRECT& r, bool cacheable)
