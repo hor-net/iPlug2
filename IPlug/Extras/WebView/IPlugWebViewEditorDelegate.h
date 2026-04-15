@@ -103,7 +103,11 @@ public:
   {
     WDL_String str;
     str.SetFormatted(mMaxJSStringLength, "SCVFD(%i, %f)", ctrlTag, normalizedValue);
+   #ifdef OS_MAC
     QueueJavaScript(str.Get());
+  #else
+    EvaluateJavaScript(str.Get());
+   #endif
   }
 
   void SendControlMsgFromDelegate(int ctrlTag, int msgTag, int dataSize, const void* pData) override
@@ -113,7 +117,11 @@ public:
     base64.resize(B64ENCODE_OUT_SAFESIZE(dataSize));
     wdl_base64encode(reinterpret_cast<const unsigned char*>(pData), base64.data(), dataSize);
     str.SetFormatted(mMaxJSStringLength, "SCMFD(%i, %i, %i, \"%s\")", ctrlTag, msgTag, base64.size(), base64.data());
+#ifdef OS_MAC
     QueueJavaScript(str.Get());
+#else
+    EvaluateJavaScript(str.Get());
+#endif
   }
 
   void SendParameterValueFromDelegate(int paramIdx, double value, bool normalized) override
@@ -126,7 +134,11 @@ public:
     }
     
     str.SetFormatted(mMaxJSStringLength, "SPVFD(%i, %f)", paramIdx, value);
+#ifdef OS_MAC
     QueueJavaScript(str.Get());
+#else
+    EvaluateJavaScript(str.Get());
+#endif
   }
 
   void SendArbitraryMsgFromDelegate(int msgTag, int dataSize, const void* pData) override
@@ -136,7 +148,11 @@ public:
     base64.resize(B64ENCODE_OUT_SAFESIZE(dataSize));
     wdl_base64encode(reinterpret_cast<const unsigned char*>(pData), base64.data(), dataSize);
     str.SetFormatted(mMaxJSStringLength, "SAMFD(%i, %lu, \"%s\")", msgTag, base64.size(), base64.data());
+#ifdef OS_MAC
     QueueJavaScript(str.Get());
+#else
+    EvaluateJavaScript(str.Get());
+#endif
     
   }
   
@@ -144,7 +160,11 @@ public:
   {
     WDL_String str;
     str.SetFormatted(mMaxJSStringLength, "SMMFD(%i, %i, %i)", msg.mStatus, msg.mData1, msg.mData2);
+#ifdef OS_MAC
     QueueJavaScript(str.Get());
+#else
+    EvaluateJavaScript(str.Get());
+#endif
   }
   
   bool OnKeyDown(const IKeyPress& key) override;
@@ -299,10 +319,12 @@ public:
     // Send params using the correct mechanism (SendJSONFromDelegate -> SendArbitraryMsgFromDelegate with -1)
     printf("Sending params via SendJSONFromDelegate\n");
     SendJSONFromDelegate(msg);
-    
+
+   #ifdef OS_MAC
     // First flush all queued JavaScript messages and set mWebViewReady = true
     FlushJavaScriptQueue();
-    
+   #endif
+
     OnUIOpen();
   }
   
@@ -310,10 +332,12 @@ public:
   {
     mMaxJSStringLength = length;
   }
-  
+
+  #ifdef OS_MAC
   // JavaScript message queue system for macOS timing fix
   void QueueJavaScript(const char* scriptStr);
   void FlushJavaScriptQueue();
+  #endif
 
   /** Load index.html (from plugin src dir in debug builds, and from bundle in release builds) on desktop
    * Note: if your debug build is code-signed with the hardened runtime It won't be able to load the file outside it's sandbox, and this
