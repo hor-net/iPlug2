@@ -38,7 +38,11 @@ using namespace iplug;
 
 WebViewEditorDelegate::WebViewEditorDelegate(int nParams)
   : IEditorDelegate(nParams)
-  , IWebView()
+#if defined _DEBUG
+  , IWebView(true, true)
+#else
+  , IWebView(true, false)
+#endif
 {
 }
 
@@ -95,3 +99,5 @@ bool WebViewEditorDelegate::OnKeyUp(const IKeyPress& key)
 
   return true;
 }
+
+// OnMessage implementation removed - see IPlugWebViewEditorDelegate.h for OnMessageFromWebView override

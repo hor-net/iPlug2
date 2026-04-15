@@ -149,10 +149,10 @@ void* IWebViewImpl::OpenWebView(void* pParent, float x, float y, float w, float 
   
   // this script waits for DOMContentLoaded and then notifies C++ that JavaScript is ready
   [controller addUserScript:[[WKUserScript alloc] initWithSource:
-                             @"window.addEventListener('load', setTimeout(function() { \
+                             @"window.addEventListener('load', function() { setTimeout(function() { \
                                 console.log(\"sending JSREADY\"); \
                                 IPlugSendMsg({'msg': 'JSREADY'}) \
-                              }, 100));"
+                              }, 100)});"
                              injectionTime:WKUserScriptInjectionTimeAtDocumentStart
                              forMainFrameOnly:YES]];
   

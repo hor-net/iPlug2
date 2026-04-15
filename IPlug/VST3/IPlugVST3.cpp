@@ -17,6 +17,7 @@
 #include "pluginterfaces/vst/ivstmidicontrollers.h"
 
 #include "IPlugVST3.h"
+#include "IPlugEditorDelegate.h"
 
 using namespace iplug;
 using namespace Steinberg;
@@ -145,6 +146,10 @@ IPlugView* PLUGIN_API IPlugVST3::createView(const char* name)
   if (HasUI() && name && strcmp(name, "editor") == 0)
   {
     mView = new ViewType(*this);
+    
+    void* ptrs[2] = { componentHandler, mView };
+    OnMessage(0x56535433, 0, sizeof(ptrs), ptrs);
+    
     return mView;
   }
   

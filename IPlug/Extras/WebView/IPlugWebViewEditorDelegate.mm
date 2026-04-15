@@ -148,7 +148,11 @@ using namespace iplug;
 
 WebViewEditorDelegate::WebViewEditorDelegate(int nParams)
 : IEditorDelegate(nParams)
-, IWebView()
+#if defined _DEBUG
+, IWebView(true, true)
+#else
+, IWebView(true, false)
+#endif
 , mWebViewReady(false)
 {
   
@@ -222,16 +226,16 @@ void WebViewEditorDelegate::QueueJavaScript(const char* scriptStr)
 {
   std::lock_guard<std::mutex> lock(mQueueMutex);
   
-  printf("QueueJavaScript called: %s (ready: %s)\n", scriptStr, mWebViewReady ? "YES" : "NO");
+  //printf("QueueJavaScript called: %s (ready: %s)\n", scriptStr, mWebViewReady ? "YES" : "NO");
   
   if (mWebViewReady)
   {
-    printf("EXECUTING IMMEDIATELY: %s\n", scriptStr);
+    //printf("EXECUTING IMMEDIATELY: %s\n", scriptStr);
     EvaluateJavaScript(scriptStr);
   }
   else
   {
-    printf("ADDING TO QUEUE: %s\n", scriptStr);
+    //printf("ADDING TO QUEUE: %s\n", scriptStr);
     mJavaScriptQueue.push(std::string(scriptStr));
   }
 }
@@ -240,12 +244,12 @@ void WebViewEditorDelegate::FlushJavaScriptQueue()
 {
   std::lock_guard<std::mutex> lock(mQueueMutex);
   
-  printf("FlushJavaScriptQueue called, queue size: %zu\n", mJavaScriptQueue.size());
+  //printf("FlushJavaScriptQueue called, queue size: %zu\n", mJavaScriptQueue.size());
   
   while (!mJavaScriptQueue.empty())
   {
     const std::string& script = mJavaScriptQueue.front();
-    printf("Flushing from queue: %s\n", script.c_str());
+    //printf("Flushing from queue: %s\n", script.c_str());
     EvaluateJavaScript(script.c_str());
     mJavaScriptQueue.pop();
   }

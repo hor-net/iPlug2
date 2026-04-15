@@ -43,6 +43,13 @@
 #include <mutex>
 #include <string>
 
+#ifdef VST3_API
+#include "pluginterfaces/vst/ivstcontextmenu.h"
+#include "pluginterfaces/vst/ivsteditcontroller.h"
+#include "pluginterfaces/vst/ivstplugview.h"
+#include "pluginterfaces/base/funknown.h"
+#endif
+
 /**
  * @file
  * @copydoc WebViewEditorDelegate
@@ -60,7 +67,6 @@ static const char* DEFAULT_PATH = "~/Desktop";
 // calculate the size of 'output' buffer required for a 'input' buffer of length x during Base64 decoding operation
 #define B64DECODE_OUT_SAFESIZE(x) (((x)*3)/4)
 
-
 /** This Editor Delegate allows using a platform native web view as the UI for an iPlug plugin */
 class WebViewEditorDelegate : public IEditorDelegate
                             , public IWebView
@@ -77,6 +83,20 @@ public:
   void CloseWindow() override
   {
     CloseWebView();
+  }
+
+  bool OnMessage(int msgTag, int ctrlTag, int dataSize, const void* pData) override
+  {
+#ifdef VST3_API
+    if (msgTag == 0x56535433 && dataSize == sizeof(void*) * 2 && pData)
+    {
+      void** ptrs = (void**)const_cast<void*>(pData);
+      mHandler = (Steinberg::Vst::IComponentHandler*)ptrs[0];
+      mVST3View = (Steinberg::IPlugView*)ptrs[1];
+      return true;
+    }
+#endif
+    return false;
   }
 
   void SendControlValueFromDelegate(int ctrlTag, double normalizedValue) override
@@ -137,6 +157,42 @@ public:
     SendArbitraryMsgFromDelegate(-1, static_cast<int>(jsonMessage.dump().size()), jsonMessage.dump().c_str());
   }
 
+  /** Called when a right click occurs in the webview. 
+   *  paramIdx is the parameter index or -1. 
+   *  x, y are coordinates in the webview (scaled by dpr).
+   *  dpr is the device pixel ratio. 
+   *  Override this in your plugin class to handle the context menu (e.g. using IComponentHandler3 in VST3).
+   */
+  virtual void OnWebContextMenu(int paramIdx, float x, float y, float dpr)
+  {
+#ifdef VST3_API
+    if (mHandler && mVST3View)
+    {
+      Steinberg::FUnknownPtr<Steinberg::Vst::IComponentHandler3> handler3(mHandler);
+      if (handler3)
+      {
+        Steinberg::Vst::IContextMenu* pContextMenu = nullptr;
+        Steinberg::Vst::ParamID pid = static_cast<Steinberg::Vst::ParamID>(paramIdx);
+        pContextMenu = handler3->createContextMenu(mVST3View, (paramIdx >= 0) ? &pid : nullptr);
+        if (pContextMenu)
+              {
+                float scale = 1.f;
+#ifdef OS_WIN
+                scale = dpr;
+#endif
+                pContextMenu->popup(x * scale, y * scale);
+                pContextMenu->release();
+              }
+      }
+    }
+#endif
+  }
+
+#ifdef VST3_API
+  Steinberg::Vst::IComponentHandler* mHandler = nullptr;
+  Steinberg::IPlugView* mVST3View = nullptr;
+#endif
+
   void OnMessageFromWebView(const char* jsonStr) override
   {
     nlohmann::json json;
@@ -191,6 +247,14 @@ public:
     {
       IKeyPress keyPress = ConvertToIKeyPress(json["keyCode"].get<uint32_t>(), json["utf8"].get<std::string>().c_str(), json["S"].get<bool>(), json["C"].get<bool>(), json["A"].get<bool>());
       json["isUp"].get<bool>() ? OnKeyUp(keyPress) : OnKeyDown(keyPress); // return value not used
+    }
+    else if(json["msg"] == "CTXMFUI")
+    {
+      int paramIdx = json["paramIdx"].get<int>();
+      float x = json["x"].get<float>();
+      float y = json["y"].get<float>();
+      float dpr = json["dpr"].get<float>();
+      OnWebContextMenu(paramIdx, x, y, dpr);
     }
     else if(json["msg"] == "JSREADY")
     {
