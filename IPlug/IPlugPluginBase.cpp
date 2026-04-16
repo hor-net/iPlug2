@@ -653,7 +653,12 @@ bool IPluginBase::SavePresetAsFXP(const char* file) const
 {
   if (CStringHasContents(file))
   {
+
+#ifdef _WIN32
     FILE* fp = fopenUTF8(file, "wb");
+#else
+    FILE* fp = fopen(file, "wb");
+#endif
     
     IByteChunk pgm;
     

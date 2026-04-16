@@ -222,6 +222,7 @@ bool WebViewEditorDelegate::OnKeyUp(const IKeyPress& key)
 }
 
 // JavaScript message queue system implementation
+#ifdef OS_MAC
 void WebViewEditorDelegate::QueueJavaScript(const char* scriptStr)
 {
   std::lock_guard<std::mutex> lock(mQueueMutex);
@@ -254,3 +255,5 @@ void WebViewEditorDelegate::FlushJavaScriptQueue()
     mJavaScriptQueue.pop();
   }
 }
+#endif
+
