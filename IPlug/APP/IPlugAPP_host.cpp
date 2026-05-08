@@ -468,6 +468,19 @@ bool IPlugAPPHost::TryToChangeAudio()
 
   if (inputID && outputID)
   {
+#ifdef __APPLE__
+    // If system audio loopback is enabled, create an aggregate device
+    if (mState.mCaptureSystemAudio)
+    {
+      auto aggDeviceID = CreateAggregateDeviceForLoopback(outputID.value());
+      if (aggDeviceID)
+      {
+        // Replace the input with our aggregate loopback device
+        inputID = aggDeviceID;
+        DBGMSG("Using aggregate device for system audio loopback: %u\n", aggDeviceID.value());
+      }
+    }
+#endif
     return InitAudio(inputID.value(), outputID.value(), mState.mAudioSR, mState.mBufferSize);
   }
 
@@ -799,3 +812,160 @@ void IPlugAPPHost::ErrorCallback(RtAudioErrorType type, const std::string &error
   std::cerr << "\nerrorCallback: " << errorText << "\n\n";
 }
 
+
+#ifdef __APPLE__
+#include <CoreAudio/CoreAudio.h>
+#include <AudioToolbox/AudioToolbox.h>
+
+// Helper: Get device UID from device ID
+static CFStringRef GetDeviceUID(AudioObjectID deviceID)
+{
+  AudioObjectPropertyAddress addr = {
+    kAudioDevicePropertyDeviceUID,
+    kAudioObjectPropertyScopeGlobal,
+    kAudioObjectPropertyElementMain
+  };
+  
+  CFStringRef uid = nullptr;
+  UInt32 size = sizeof(uid);
+  
+  if (AudioObjectGetPropertyData(deviceID, &addr, 0, nullptr, &size, &uid) == noErr)
+  {
+    return uid;
+  }
+  
+  return CFSTR("");
+}
+
+// Helper: Get default output device ID
+static AudioObjectID GetDefaultOutputDeviceID()
+{
+  AudioObjectPropertyAddress addr = {
+    kAudioHardwarePropertyDefaultOutputDevice,
+    kAudioObjectPropertyScopeGlobal,
+    kAudioObjectPropertyElementMain
+  };
+  
+  AudioObjectID deviceID = kAudioObjectUnknown;
+  UInt32 size = sizeof(deviceID);
+  
+  if (AudioObjectGetPropertyData(kAudioObjectSystemObject, &addr, 0, nullptr, &size, &deviceID) == noErr)
+  {
+    return deviceID;
+  }
+  
+  return kAudioObjectUnknown;
+}
+
+// static
+std::optional<uint32_t> IPlugAPPHost::CreateAggregateDeviceForLoopback(uint32_t outputDeviceID)
+{
+  // On macOS, system audio loopback works by using the OUTPUT device's INPUT channels
+  // (the device captures what would be played, creating a loopback effect)
+  
+  // Find the default output device (provides system audio loopback)
+  AudioObjectID loopbackSourceID = GetDefaultOutputDeviceID();
+  
+  if (loopbackSourceID == kAudioObjectUnknown)
+  {
+    DBGMSG("Could not find default output device for loopback\n");
+    return std::nullopt;
+  }
+  
+  // Verify the loopback source has input channels (it should on macOS)
+  AudioObjectPropertyAddress inputChannelsAddr = {
+    kAudioDevicePropertyStreamConfiguration,
+    kAudioDevicePropertyScopeInput,
+    kAudioObjectPropertyElementMain
+  };
+  
+  UInt32 propSize = 0;
+  OSStatus status = AudioObjectGetPropertyDataSize(
+    loopbackSourceID, &inputChannelsAddr, 0, nullptr, &propSize
+  );
+  
+  if (status != noErr || propSize == 0)
+  {
+    DBGMSG("Default output device does not support input (loopback)\n");
+    return std::nullopt;
+  }
+  
+  // Get the UID of the loopback source
+  CFStringRef loopbackUID = GetDeviceUID(loopbackSourceID);
+  
+  // Get the UID of the requested output device
+  CFStringRef outputUID = GetDeviceUID(outputDeviceID);
+  
+  // Create aggregate device description
+  CFMutableDictionaryRef aggDesc = CFDictionaryCreateMutable(
+    kCFAllocatorDefault, 0,
+    &kCFTypeDictionaryKeyCallBacks,
+    &kCFTypeDictionaryValueCallBacks
+  );
+  
+  // Set aggregate device properties
+  CFDictionarySetValue(aggDesc, CFSTR(kAudioAggregateDeviceSubTypeKey), 
+    CFSTR("AggregateDevice"));
+  CFDictionarySetValue(aggDesc, CFSTR(kAudioAggregateDeviceNameKey), 
+    CFSTR("iPlug System Loopback"));
+  CFDictionarySetValue(aggDesc, CFSTR(kAudioAggregateDeviceUIDKey), 
+    CFSTR("iPlugSystemLoopback"));
+  
+  // Create sub-devices array
+  CFMutableArrayRef subDevices = CFArrayCreateMutable(
+    kCFAllocatorDefault, 2, &kCFTypeArrayCallBacks
+  );
+  
+  // Add the loopback source device (default output, which provides system audio)
+  CFMutableDictionaryRef loopbackSubDev = CFDictionaryCreateMutable(
+    kCFAllocatorDefault, 0,
+    &kCFTypeDictionaryKeyCallBacks,
+    &kCFTypeDictionaryValueCallBacks
+  );
+  CFDictionarySetValue(loopbackSubDev, CFSTR(kAudioSubDeviceUIDKey), loopbackUID);
+  CFArrayAppendValue(subDevices, loopbackSubDev);
+  CFRelease(loopbackSubDev);
+  
+  // Add the requested output device
+  CFMutableDictionaryRef outputSubDev = CFDictionaryCreateMutable(
+    kCFAllocatorDefault, 0,
+    &kCFTypeDictionaryKeyCallBacks,
+    &kCFTypeDictionaryValueCallBacks
+  );
+  CFDictionarySetValue(outputSubDev, CFSTR(kAudioSubDeviceUIDKey), outputUID);
+  CFArrayAppendValue(subDevices, outputSubDev);
+  CFRelease(outputSubDev);
+  
+  // Set the sub-devices in the aggregate
+  CFDictionarySetValue(aggDesc, CFSTR(kAudioAggregateDeviceSubDeviceListKey), subDevices);
+  CFRelease(subDevices);
+  
+  // Create the aggregate device using AudioHardware
+  AudioObjectID aggregateDeviceID = kAudioObjectUnknown;
+  size = sizeof(aggregateDeviceID);
+  
+  AudioObjectPropertyAddress createAddr = {
+    kAudioHardwarePropertyCreateAggregateDevice,
+    kAudioObjectPropertyScopeGlobal,
+    kAudioObjectPropertyElementMain
+  };
+  
+  status = AudioObjectGetPropertyData(
+    kAudioObjectSystemObject,
+    &createAddr,
+    0, nullptr,
+    &size, aggDesc
+  );
+  
+  CFRelease(aggDesc);
+  
+  if (status != noErr)
+  {
+    DBGMSG("Failed to create aggregate device: %d\n", status);
+    return std::nullopt;
+  }
+  
+  DBGMSG("Created aggregate device for system audio loopback: %u\n", aggregateDeviceID);
+  return aggregateDeviceID;
+}
+#endif

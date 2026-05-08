@@ -100,6 +100,7 @@ public:
     uint32_t mAudioInChanR;
     uint32_t mAudioOutChanL;
     uint32_t mAudioOutChanR;
+    bool mCaptureSystemAudio = false; // System audio loopback on macOS/Windows
     
     AppState()
     : mAudioInDev(DEFAULT_INPUT_DEV)
@@ -178,6 +179,21 @@ public:
   /** Check if I/O is disabled
    * @return true if audio and MIDI I/O is disabled */
   bool IsNoIO() const { return mNoIO; }
+
+  /** Enable/disable system audio loopback capture (macOS/Windows)
+   * @param enable true to enable system audio capture via loopback */
+  void SetCaptureSystemAudio(bool enable) { mState.mCaptureSystemAudio = enable; }
+
+  /** Check if system audio capture is enabled
+   * @return true if capturing system audio */
+  bool IsCapturingSystemAudio() const { return mState.mCaptureSystemAudio; }
+
+#ifdef __APPLE__
+  /** Create a Core Audio aggregate device for system audio loopback
+   * @param outputDeviceID The output device to include in the aggregate
+   * @return The aggregate device ID, or nullopt if failed */
+  std::optional<uint32_t> CreateAggregateDeviceForLoopback(uint32_t outputDeviceID);
+#endif
 
   void PopulateSampleRateList(HWND hwndDlg, RtAudio::DeviceInfo* pInputDevInfo, RtAudio::DeviceInfo* pOutputDevInfo);
   void PopulateAudioInputList(HWND hwndDlg, RtAudio::DeviceInfo* pInfo);
