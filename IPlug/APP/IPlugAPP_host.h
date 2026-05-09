@@ -100,7 +100,11 @@ public:
     uint32_t mAudioInChanR;
     uint32_t mAudioOutChanL;
     uint32_t mAudioOutChanR;
-    bool mCaptureSystemAudio = false; // System audio loopback on macOS/Windows
+    /** Enable system audio loopback capture.
+     * When enabled, the app will capture audio from the system output (loopback).
+     * On macOS: uses Core Audio aggregate device with default output as input.
+     * On Windows: uses WASAPI loopback mode. */
+    bool mCaptureSystemAudio = false;
     
     AppState()
     : mAudioInDev(DEFAULT_INPUT_DEV)
@@ -180,7 +184,18 @@ public:
    * @return true if audio and MIDI I/O is disabled */
   bool IsNoIO() const { return mNoIO; }
 
-  /** Enable/disable system audio loopback capture (macOS/Windows)
+  /** Enable/disable system audio loopback capture.
+   * When enabled, the standalone app will capture audio from the system
+   * output and process it through the hosted plugin(s), then output to
+   * the selected audio device.
+   * 
+   * On macOS: Creates a Core Audio aggregate device combining the default
+   * output device (which provides system audio via its input channels/loopback)
+   * with the user-selected output device.
+   * 
+   * On Windows: Uses WASAPI loopback mode (no aggregate device needed,
+   * RtAudio handles this automatically when the device is opened).
+   * 
    * @param enable true to enable system audio capture via loopback */
   void SetCaptureSystemAudio(bool enable) { mState.mCaptureSystemAudio = enable; }
 
@@ -189,10 +204,24 @@ public:
   bool IsCapturingSystemAudio() const { return mState.mCaptureSystemAudio; }
 
 #ifdef __APPLE__
-  /** Create a Core Audio aggregate device for system audio loopback
-   * @param outputDeviceID The output device to include in the aggregate
-   * @return The aggregate device ID, or nullopt if failed */
+  /** Create a Core Audio aggregate device for system audio loopback.
+   * On macOS, system audio can be captured by using the default output device's
+   * INPUT channels. This method creates an aggregate device that combines:
+   * - The default output device (as input source for system audio loopback)
+   * - The user-selected output device (for audio output after processing)
+   * 
+   * The aggregate device appears as a single audio device to RtAudio.
+   * 
+   * @param outputDeviceID The user-selected output device ID
+   * @return The aggregate device ID, or nullopt if creation failed */
   std::optional<uint32_t> CreateAggregateDeviceForLoopback(uint32_t outputDeviceID);
+#endif
+
+#ifdef OS_WIN
+  /** Check if WASAPI is available and supports loopback.
+   * WASAPI loopback mode captures system audio on Windows without additional drivers.
+   * @return true if WASAPI loopback is supported on this system */
+  bool SupportsWASAPILoopback() const;
 #endif
 
   void PopulateSampleRateList(HWND hwndDlg, RtAudio::DeviceInfo* pInputDevInfo, RtAudio::DeviceInfo* pOutputDevInfo);

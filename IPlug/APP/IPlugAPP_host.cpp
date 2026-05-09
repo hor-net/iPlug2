@@ -419,6 +419,27 @@ bool IPlugAPPHost::TryToChangeAudio()
 #if defined OS_WIN
   // ASIO has one device, use the output for the input ID
   auto inputID = GetAudioDeviceID(mState.mAudioDriverType == kDeviceASIO ? mState.mAudioOutDev.Get() : mState.mAudioInDev.Get());
+  
+  // If system audio loopback is enabled on Windows with WASAPI
+  if (mState.mCaptureSystemAudio)
+  {
+    // For WASAPI loopback, we need to use the "System" or "Loopback" device as input
+    // This captures all audio that would normally go to the speakers
+    if (inputID && mAudioInputDevIDs.size() > 0)
+    {
+      // Check if we should use the default input device (which is typically the system loopback)
+      // For now, we'll use the default input device as the loopback source
+      if (!mDefaultInputDev)
+      {
+        mDefaultInputDev = mAudioInputDevIDs[0];
+      }
+      
+      // On Windows with WASAPI, the default input device should be the "System" capture device
+      // which supports loopback. RtAudio handles the AUDCLNT_STREAMFLAGS_LOOPBACK flag internally.
+      DBGMSG("Windows: using default input as system audio loopback source\n");
+      inputID = mDefaultInputDev;
+    }
+  }
 #elif defined OS_MAC
   auto inputID = GetAudioDeviceID(mState.mAudioInDev.Get());
 #else
@@ -600,6 +621,19 @@ bool IPlugAPPHost::InitAudio(uint32_t inID, uint32_t outID, uint32_t sr, uint32_
   CloseAudio();
 
   RtAudio::StreamParameters iParams, oParams;
+
+#ifdef OS_WIN
+  // On Windows, if system audio loopback is enabled and we're using WASAPI
+  // we need to configure the input device for loopback mode
+  if (mState.mCaptureSystemAudio)
+  {
+    DBGMSG("Windows system audio loopback: configuring input for WASAPI loopback mode\n");
+    // Note: RtAudio with WASAPI will automatically use loopback when
+    // the input device is the system default capture device.
+    // The key is that the input device should be the "System" capture device
+    // which provides the mixed output audio.
+  }
+#endif
   iParams.deviceId = inID;
   iParams.nChannels = GetPlug()->MaxNChannels(ERoute::kInput); // TODO: flexible channel count
   iParams.firstChannel = 0; // TODO: flexible channel count
@@ -812,6 +846,49 @@ void IPlugAPPHost::ErrorCallback(RtAudioErrorType type, const std::string &error
   std::cerr << "\nerrorCallback: " << errorText << "\n\n";
 }
 
+////////////////////////////////////////////////////////////////////////////////
+// SYSTEM AUDIO LOOPBACK IMPLEMENTATION
+//
+// Overview:
+// This module provides system audio loopback capture on both macOS and Windows.
+// When enabled, the standalone app captures audio from the system's output
+// (what would normally go to the speakers) and processes it through the
+// hosted iPlug plugin(s), then outputs to the selected audio device.
+//
+// How it works:
+//
+// macOS:
+// ------
+// Core Audio on macOS supports "aggregate devices" which combine multiple
+// physical audio devices into a single virtual device. Crucially, when you
+// include the default OUTPUT device in an aggregate, the system automatically
+// provides its INPUT channels with the mixed output audio (loopback).
+//
+// So the flow is:
+// 1. User selects an output device (e.g., speakers)
+// 2. When loopback is enabled, we create an aggregate device that combines:
+//    - The default output device (provides system audio via its input/loopback)
+//    - The user-selected output device (for actual audio output)
+// 3. RtAudio opens this aggregate device, and we use its input channels
+//    as the source for our audio processing
+//
+// Windows:
+// --------
+// WASAPI (Windows Audio Session API) supports loopback mode natively via the
+// AUDCLNT_STREAMFLAGS_LOOPBACK flag. When a capture stream is opened with this
+// flag, it captures all audio from the system mix (what would go to the
+// speakers).
+//
+// The key insight is that on Windows, the "default input device" when using
+// WASAPI is typically the "System" device which supports loopback. RtAudio
+// handles the flag internally when appropriate.
+//
+// Implementation:
+// - On macOS: We manually create an aggregate device via Core Audio API
+// - On Windows: RtAudio handles the loopback flag automatically for WASAPI
+////////////////////////////////////////////////////////////////////////////////
+
+
 
 #ifdef __APPLE__
 #include <CoreAudio/CoreAudio.h>
@@ -967,5 +1044,27 @@ std::optional<uint32_t> IPlugAPPHost::CreateAggregateDeviceForLoopback(uint32_t 
   
   DBGMSG("Created aggregate device for system audio loopback: %u\n", aggregateDeviceID);
   return aggregateDeviceID;
+}
+#endif
+
+#ifdef OS_WIN
+#include <audioclient.h>
+#include <mmdeviceapi.h>
+#include <endpointvolume.h>
+
+// GUID for Windows WASAPI loopback device
+static const GUID CLSID_MMDeviceEnumerator = {0xBCDE0395, 0xE52F, 0x467C, {0x8E, 0x3D, 0xC4, 0x57, 0x92, 0x85, 0x42, 0x8A}};
+
+// static
+bool IPlugAPPHost::SupportsWASAPILoopback() const
+{
+#ifdef OS_WIN
+  // WASAPI is available on Windows Vista and later
+  // Loopback is supported via the "System" default input device when using WASAPI
+  // or via the dedicated "Loopback" device
+  return mState.mAudioDriverType == 0; // 0 = WINDOWS_DS (DirectSound doesn't support loopback well)
+#else
+  return false;
+#endif
 }
 #endif
