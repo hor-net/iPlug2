@@ -28,6 +28,7 @@ BEGIN_IPLUG_NAMESPACE
 
 // Forward declarations
 class IPlugVST3Processor;
+class IPlugVST3Controller;
 
 /** A class that hosts VST3 plugins, usable in standalone IPlugAPP or embedded in another VST3 plugin */
 class IPlugVST3Host
@@ -119,11 +120,91 @@ public:
    */
   int GetNumOutputs() const { return mNumOutputs; }
 
+  //----------------------------------------------------------------------------
+  // Editor/View Management
+
+  /**
+   * Create the editor view for the hosted plugin.
+   * @param parentWindow Platform-specific parent window handle (HWND on Windows, NSView* on macOS)
+   * @return true if editor created successfully
+   */
+  bool CreateEditor(void* parentWindow);
+
+  /**
+   * Show the editor window.
+   */
+  void ShowEditor();
+
+  /**
+   * Hide the editor window.
+   */
+  void HideEditor();
+
+  /**
+   * Destroy the editor view.
+   */
+  void DeleteEditor();
+
+  /**
+   * Check if the editor exists.
+   * @return true if editor is created
+   */
+  bool HasEditor() const { return mEditorView != nullptr; }
+
+  /**
+   * Get the native platform handle for the editor view.
+   * @return HWND on Windows, NSView* on macOS, nullptr if no editor
+   */
+  void* GetEditorPlatformHandle() const;
+
+  /**
+   * Resize the editor view.
+   * @param width New width in pixels
+   * @param height New height in pixels
+   */
+  void ResizeEditor(int width, int height);
+
+  /**
+   * Get the controller for the hosted plugin.
+   * @return Pointer to IPlugVST3Controller, or nullptr if not loaded
+   */
+  IPlugVST3Controller* GetController() const { return mController.get(); }
+
+  //----------------------------------------------------------------------------
+  // Platform-specific accessors
+
+#ifdef __APPLE__
+  /**
+   * Get the NSView pointer for the editor (macOS only).
+   * @return NSView* pointer, or nullptr if no editor
+   */
+  void* GetNSView() const;
+#elif defined OS_WIN
+  /**
+   * Get the HWND for the editor (Windows only).
+   * @return HWND handle, or nullptr if no editor
+   */
+  void* GetHWND() const;
+#endif
+
 private:
   /** Helper to create minimal host context for the plugin */
   Steinberg::FUnknown* CreateHostContext();
 
+  /** Helper to initialize the controller */
+  bool InitializeController();
+
+  /** Helper to connect processor and controller via IConnectionPoint */
+  bool ConnectController();
+
   std::unique_ptr<IPlugVST3Processor> mPlugin = nullptr;
+  std::unique_ptr<IPlugVST3Controller> mController = nullptr;
+
+  // Editor view owned by the controller
+  Steinberg::IPlugView* mEditorView = nullptr;
+
+  // Platform-specific parent window handle
+  void* mParentWindow = nullptr;
 
   double mSampleRate = 44100.0;
   int mBlockSize = 512;
