@@ -1068,3 +1068,234 @@ bool IPlugAPPHost::SupportsWASAPILoopback() const
 #endif
 }
 #endif
+
+////////////////////////////////////////////////////////////////////////////////
+// SYSTEM TRAY / MENU BAR IMPLEMENTATION
+//
+// Usage:
+// 1. Call host->SetSystemTrayMode(true) to enable system tray/menu bar mode
+// 2. When user closes the window, the app should minimize to tray instead of quitting
+// 3. Click on the tray icon to re-open the main window
+//
+// On macOS: Uses NSStatusItem to add an icon to the menu bar
+// On Windows: Uses Shell_NotifyIcon API to add an icon to the system tray
+//
+// For macOS, SWELL provides the message loop, so we post a notification
+// when the tray icon is clicked.
+// For Windows, we create a hidden window to receive tray icon messages.
+////////////////////////////////////////////////////////////////////////////////
+
+#ifdef __APPLE__
+#import <Cocoa/Cocoa.h>
+
+// Cocoa wrapper for system tray functionality
+@interface IPlugSystemTrayDelegate : NSObject <NSStatusBarDelegate>
+{
+  void* mHost; // IPlugAPPHost pointer
+}
+- (instancetype)initWithHost:(void*)host;
+- (void)statusBarButtonClicked:(id)sender;
+@end
+
+@implementation IPlugSystemTrayDelegate
+{
+  void* mHost;
+  NSStatusItem* mStatusItem;
+}
+
+- (instancetype)initWithHost:(void*)host
+{
+  self = [super init];
+  if (self)
+  {
+    mHost = host;
+    mStatusItem = nil;
+  }
+  return self;
+}
+
+- (void)setStatusItem:(NSStatusItem*)item
+{
+  mStatusItem = item;
+}
+
+- (void)statusBarButtonClicked:(id)sender
+{
+  // Post notification to app to show main window
+  [[NSNotificationCenter defaultCenter] postNotificationName:@"IPlugShowMainWindow" object:nil];
+}
+
+@end
+
+// Global reference to the delegate (to prevent garbage collection)
+static IPlugSystemTrayDelegate* sTrayDelegate = nullptr;
+
+#endif // __APPLE__
+
+#ifdef OS_WIN
+// Windows tray icon data
+static NOTIFYICONDATAW gTrayIconData;
+static HWND gTrayIconWnd = nullptr;
+
+// Window procedure for tray icon messages
+static LRESULT CALLBACK TrayIconWndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
+{
+  switch (uMsg)
+  {
+    case WM_USER + 1: // Tray icon clicked
+      if (lParam == WM_LBUTTONDOWN || lParam == WM_RBUTTONUP)
+      {
+        // Show the main window
+        HWND mainWnd = GetWindow(gHWND, GW_OWNER);
+        if (mainWnd)
+        {
+          ShowWindow(mainWnd, SW_SHOW);
+          SetForegroundWindow(mainWnd);
+        }
+      }
+      break;
+    case WM_DESTROY:
+      Shell_NotifyIconW(NIM_DELETE, &gTrayIconData);
+      break;
+  }
+  return DefWindowProc(hwnd, uMsg, wParam, lParam);
+}
+#endif // OS_WIN
+
+// Implementation
+void IPlugAPPHost::SetSystemTrayMode(bool enable, const char* iconPath)
+{
+  mSystemTrayMode = enable;
+  if (iconPath)
+    mSystemTrayIconPath.Set(iconPath);
+  
+#ifdef __APPLE__
+  if (enable)
+  {
+    // Create NSStatusItem for menu bar
+    NSStatusItem* statusItem = [[NSStatusBar systemStatusBar] statusItemWithLength:NSVariableStatusItemLength];
+    
+    // Set up the button
+    NSStatusBarButton* button = [statusItem button];
+    if (iconPath && strlen(iconPath) > 0)
+    {
+      NSString* path = [NSString stringWithUTF8String:iconPath];
+      NSImage* icon = [[NSImage alloc] initWithContentsOfFile:path];
+      if (icon)
+      {
+        [button setImage:icon];
+      }
+    }
+    else
+    {
+      // Use app icon as default
+      [button setImage:[NSImage imageNamed:NSImageNameApplicationIcon]];
+    }
+    
+    [button setToolTip:@"iPlug Audio"];
+    
+    // Create and assign delegate
+    if (!sTrayDelegate)
+    {
+      sTrayDelegate = [[IPlugSystemTrayDelegate alloc] initWithHost:this];
+    }
+    [sTrayDelegate setStatusItem:statusItem];
+    [button setTarget:sTrayDelegate];
+    [button setAction:@selector(statusBarButtonClicked:)];
+    
+    DBGMSG("Created menu bar status item\\n");
+  }
+  else
+  {
+    // Remove status item
+    if (sTrayDelegate)
+    {
+      [[NSStatusBar systemStatusBar] removeStatusItem:[[sTrayDelegate] statusItem]];
+      sTrayDelegate = nullptr;
+    }
+    DBGMSG("Removed menu bar status item\\n");
+  }
+#elif defined(OS_WIN)
+  if (enable)
+  {
+    // Register a hidden window for tray icon messages
+    WNDCLASSW wc = {};
+    wc.lpfnWndProc = TrayIconWndProc;
+    wc.lpszClassName = L"IPlugTrayIconWnd";
+    wc.hInstance = gHINSTANCE;
+    RegisterClassW(&wc);
+    
+    gTrayIconWnd = CreateWindowW(L"IPlugTrayIconWnd", L"IPlug Tray", 
+      WS_DISABLED, 0, 0, 0, 0, NULL, NULL, gHINSTANCE, NULL);
+    
+    // Set up tray icon data
+    memset(&gTrayIconData, 0, sizeof(gTrayIconData));
+    gTrayIconData.cbSize = sizeof(gTrayIconData);
+    gTrayIconData.hWnd = gTrayIconWnd;
+    gTrayIconData.uID = 1;
+    gTrayIconData.uFlags = NIF_ICON | NIF_MESSAGE | NIF_TIP;
+    gTrayIconData.uCallbackMessage = WM_USER + 1;
+    wcscpy(gTrayIconData.szTip, L"iPlug Audio");
+    
+    // Load the app icon
+    gTrayIconData.hIcon = LoadIconW(gHINSTANCE, MAKEINTRESOURCE(IDI_APP_ICON));
+    
+    // Add the icon to the system tray
+    Shell_NotifyIconW(NIM_ADD, &gTrayIconData);
+    
+    DBGMSG("Created system tray icon\\n");
+  }
+  else
+  {
+    // Remove tray icon
+    Shell_NotifyIconW(NIM_DELETE, &gTrayIconData);
+    
+    if (gTrayIconWnd)
+    {
+      DestroyWindow(gTrayIconWnd);
+      gTrayIconWnd = nullptr;
+    }
+    
+    UnregisterClassW(L"IPlugTrayIconWnd", gHINSTANCE);
+    DBGMSG("Removed system tray icon\\n");
+  }
+#else
+  // Linux - not implemented
+  DBGMSG("System tray mode not supported on this platform\\n");
+#endif
+}
+
+void IPlugAPPHost::ShowNotification(const char* title, const char* message)
+{
+#ifdef __APPLE__
+  // Use NSUserNotification for system notifications on macOS
+  NSUserNotificationCenter* center = [NSUserNotificationCenter defaultUserNotificationCenter];
+  NSUserNotification* notification = [[NSUserNotification alloc] init];
+  notification.title = [NSString stringWithUTF8String:title];
+  notification.informativeText = [NSString stringWithUTF8String:message];
+  [center deliverNotification:notification];
+#elif defined(OS_WIN)
+  // Use balloon tooltip via Shell_NotifyIcon
+  if (gTrayIconData.hWnd)
+  {
+    wchar_t wtitle[256];
+    wchar_t wmsg[1024];
+    mbstowcs(wtitle, title, 256);
+    mbstowcs(wmsg, message, 1024);
+    wcsncpy(gTrayIconData.szInfoTitle, wtitle, 64);
+    wcsncpy(gTrayIconData.szInfo, wmsg, 256);
+    gTrayIconData.uFlags = NIF_INFO | NIF_ICON | NIF_MESSAGE | NIF_TIP;
+    Shell_NotifyIconW(NIM_MODIFY, &gTrayIconData);
+  }
+#endif
+}
+
+void IPlugAPPHost::OnSystemTrayClick()
+{
+  // Show and activate the main window when tray icon is clicked
+  if (gHWND)
+  {
+    ShowWindow(gHWND, SW_SHOW);
+    SetForegroundWindow(gHWND);
+  }
+}

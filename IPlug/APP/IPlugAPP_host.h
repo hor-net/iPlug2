@@ -184,6 +184,34 @@ public:
    * @return true if audio and MIDI I/O is disabled */
   bool IsNoIO() const { return mNoIO; }
 
+  // System Tray / Menu Bar Integration
+  //-----------------------------------
+  
+  /** Enable system tray / menu bar mode.
+   * When enabled, the app will minimize to the system tray (Windows)
+   * or menu bar (macOS) instead of closing. A click on the icon opens
+   * the main window.
+   * 
+   * On macOS: Creates an NSStatusItem in the menu bar with the app icon.
+   * On Windows: Creates a Shell_NotifyIcon in the system tray.
+   * 
+   * @param enable true to enable system tray/menu bar mode
+   * @param iconPath Optional path to a custom icon (nullptr for default) */
+  void SetSystemTrayMode(bool enable, const char* iconPath = nullptr);
+  
+  /** Check if system tray/menu bar mode is enabled
+   * @return true if running in system tray/menu bar mode */
+  bool IsSystemTrayMode() const { return mSystemTrayMode; }
+  
+  /** Show a notification balloon/toast (Windows) or notification (macOS)
+   * @param title Notification title
+   * @param message Notification message body */
+  void ShowNotification(const char* title, const char* message);
+  
+  /** Called when user clicks on the system tray icon (Windows)
+   * @param hwnd The window handle to show/focus */
+  void OnSystemTrayClick();
+
   /** Enable/disable system audio loopback capture.
    * When enabled, the standalone app will capture audio from the system
    * output and process it through the hosted plugin(s), then output to
@@ -313,6 +341,10 @@ private:
   std::vector<uint32_t> mAudioOutputDevIDs;
   std::vector<std::string> mMidiInputDevNames;
   std::vector<std::string> mMidiOutputDevNames;
+  
+  // System tray/menu bar state
+  bool mSystemTrayMode = false;
+  WDL_String mSystemTrayIconPath;
   
   WDL_PtrList<double> mInputBufPtrs;
   WDL_PtrList<double> mOutputBufPtrs;
