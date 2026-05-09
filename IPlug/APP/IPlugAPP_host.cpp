@@ -1156,9 +1156,12 @@ static LRESULT CALLBACK TrayIconWndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPA
       {
         // Right click - show context menu with Quit option
         HMENU hMenu = CreatePopupMenu();
-        AppendMenuW(hMenu, MF_STRING, 1, L"Open iPlug");
+        wchar_t openText[64], quitText[128];
+        swprintf(openText, 64, L"Open %s", appName);
+        swprintf(quitText, 128, L"Quit %s", appName);
+        AppendMenuW(hMenu, MF_STRING, 1, openText);
         AppendMenuW(hMenu, MF_SEPARATOR, 0, nullptr);
-        AppendMenuW(hMenu, MF_STRING, 2, L"Quit");
+        AppendMenuW(hMenu, MF_STRING, 2, quitText);
         
         // Show menu at cursor position
         POINT pt;
@@ -1263,7 +1266,11 @@ void IPlugAPPHost::SetSystemTrayMode(bool enable, const char* iconPath)
     gTrayIconData.uID = 1;
     gTrayIconData.uFlags = NIF_ICON | NIF_MESSAGE | NIF_TIP;
     gTrayIconData.uCallbackMessage = WM_USER + 1;
-    wcscpy(gTrayIconData.szTip, L"iPlug Audio");
+    wchar_t appName[64];
+    mbstowcs(appName, BUNDLE_NAME, 64);
+    wchar_t tip[128];
+    swprintf(tip, 128, L"%s Audio", appName);
+    wcsncpy(gTrayIconData.szTip, tip, 64);
     
     // Load the app icon
     gTrayIconData.hIcon = LoadIconW(gHINSTANCE, MAKEINTRESOURCE(IDI_APP_ICON));
