@@ -1143,14 +1143,42 @@ static LRESULT CALLBACK TrayIconWndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPA
   switch (uMsg)
   {
     case WM_USER + 1: // Tray icon clicked
-      if (lParam == WM_LBUTTONDOWN || lParam == WM_RBUTTONUP)
+      if (lParam == WM_LBUTTONDOWN)
       {
-        // Show the main window
-        HWND mainWnd = GetWindow(gHWND, GW_OWNER);
-        if (mainWnd)
+        // Left click - show the main window
+        if (gHWND)
         {
-          ShowWindow(mainWnd, SW_SHOW);
-          SetForegroundWindow(mainWnd);
+          ShowWindow(gHWND, SW_SHOW);
+          SetForegroundWindow(gHWND);
+        }
+      }
+      else if (lParam == WM_RBUTTONUP)
+      {
+        // Right click - show context menu with Quit option
+        HMENU hMenu = CreatePopupMenu();
+        AppendMenuW(hMenu, MF_STRING, 1, L"Open iPlug");
+        AppendMenuW(hMenu, MF_SEPARATOR, 0, nullptr);
+        AppendMenuW(hMenu, MF_STRING, 2, L"Quit");
+        
+        // Show menu at cursor position
+        POINT pt;
+        GetCursorPos(&pt);
+        SetForegroundWindow(gHWND);
+        int cmd = TrackPopupMenu(hMenu, TPM_LEFTALIGN | TPM_RIGHTBUTTON | TPM_RETURNCMD, 
+          pt.x, pt.y, 0, gHWND, nullptr);
+        DestroyMenu(hMenu);
+        
+        if (cmd == 1)
+        {
+          // Open - show window
+          ShowWindow(gHWND, SW_SHOW);
+          SetForegroundWindow(gHWND);
+        }
+        else if (cmd == 2)
+        {
+          // Quit
+          Shell_NotifyIconW(NIM_DELETE, &gTrayIconData);
+          PostQuitMessage(0);
         }
       }
       break;
