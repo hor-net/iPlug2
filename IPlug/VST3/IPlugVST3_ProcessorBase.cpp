@@ -39,6 +39,7 @@ uint64_t iplug::GetAPIBusTypeForChannelIOConfig(int configIdx, ERoute dir, int b
     case 8: return SpeakerArr::k71CineSideFill; // CHECK - not the same as protools
     case 9: return SpeakerArr::kAmbi2cdOrderACN;
     case 10:return SpeakerArr::k71_2; // aka k91Atmos
+    case 12:return SpeakerArr::k71_4; // 7.1.4 Atmos
     case 16:return SpeakerArr::kAmbi3rdOrderACN;
     default:
       DBGMSG("do not yet know what to do here\n");

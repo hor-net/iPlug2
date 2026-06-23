@@ -56,6 +56,7 @@ static uint64_t GetAPIBusTypeForChannelIOConfig(int configIdx, ERoute dir, int b
     case 8: return AAX_eStemFormat_7_1_DTS;
     case 9: return AAX_eStemFormat_Ambi_2_ACN;
     case 10:return AAX_eStemFormat_7_1_2;
+    case 12:return AAX_eStemFormat_7_1_4; // 7.1.4 Atmos (12 ch), available in AAX SDK 2.9.0+
     case 16:return AAX_eStemFormat_Ambi_3_ACN;
     default:
       DBGMSG("No stem format found for this channel count, you need to implement GetAPIBusTypeForChannelIOConfig() and #define CUSTOM_BUSTYPE_FUNC\n");
