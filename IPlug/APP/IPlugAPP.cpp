@@ -43,7 +43,7 @@ IPlugAPP::IPlugAPP(const InstanceInfo& info, const Config& config)
 
 IPlugAPP::~IPlugAPP()
 {
-#if APP_HAS_TRANSPORT_BAR
+#if APP_HAS_TRANSPORT_BAR && !defined(NO_IGRAPHICS)
   if(mTransportTimer)
   {
     mTransportTimer->Stop();
@@ -190,7 +190,7 @@ void IPlugAPP::AppProcess(double** inputs, double** outputs, int nFrames)
   LEAVE_PARAMS_MUTEX
 }
 
-#if APP_HAS_TRANSPORT_BAR
+#if APP_HAS_TRANSPORT_BAR && !defined(NO_IGRAPHICS)
 void IPlugAPP::LayoutUI(IGraphics* pGraphics)
 {
   if(mLayoutFunc)
@@ -301,4 +301,3 @@ void IPlugAPP::GrayOutTransport(bool toggle)
 }
 
 #endif
-

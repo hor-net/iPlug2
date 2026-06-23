@@ -336,6 +336,98 @@ extern HMENU SWELL_app_stocksysmenu;
 
 static WDL_String gScreenshotPath;
 static bool gNoIO = false;
+static id gMenuBarController = nil;
+
+@interface VHSMK2MenuBarController : NSObject
+@property (nonatomic, strong) NSStatusItem* statusItem;
+@property (nonatomic, strong) NSMenuItem* bypassItem;
+@end
+
+@implementation VHSMK2MenuBarController
+
+- (instancetype)init
+{
+  if ((self = [super init]))
+  {
+    self.statusItem = [[NSStatusBar systemStatusBar] statusItemWithLength:NSVariableStatusItemLength];
+    self.statusItem.button.title = @"VHS";
+    
+    NSMenu* menu = [[NSMenu alloc] init];
+    
+    NSMenuItem* openItem = [[NSMenuItem alloc] initWithTitle:@"Apri" action:@selector(openApp:) keyEquivalent:@""];
+    openItem.target = self;
+    [menu addItem:openItem];
+    
+    NSMenuItem* prefItem = [[NSMenuItem alloc] initWithTitle:@"Preferenze…" action:@selector(openPreferences:) keyEquivalent:@""];
+    prefItem.target = self;
+    [menu addItem:prefItem];
+    
+    [menu addItem:[NSMenuItem separatorItem]];
+    
+    self.bypassItem = [[NSMenuItem alloc] initWithTitle:@"Bypass" action:@selector(toggleBypass:) keyEquivalent:@""];
+    self.bypassItem.target = self;
+    [menu addItem:self.bypassItem];
+    
+    [menu addItem:[NSMenuItem separatorItem]];
+    
+    NSMenuItem* quitItem = [[NSMenuItem alloc] initWithTitle:@"Esci" action:@selector(quit:) keyEquivalent:@""];
+    quitItem.target = self;
+    [menu addItem:quitItem];
+    
+    self.statusItem.menu = menu;
+    
+    [self updateBypassState];
+  }
+  
+  return self;
+}
+
+- (void)updateBypassState
+{
+  auto* host = iplug::IPlugAPPHost::sInstance.get();
+  const bool bypass = host ? host->GetBypass() : false;
+  self.bypassItem.state = bypass ? NSControlStateValueOn : NSControlStateValueOff;
+}
+
+- (void)openApp:(id)sender
+{
+  if (!gHWND)
+    return;
+  
+  NSView* view = (__bridge NSView*)gHWND;
+  NSWindow* window = [view window];
+  
+  if (!window)
+    return;
+  
+  [NSApp activateIgnoringOtherApps:YES];
+  [window makeKeyAndOrderFront:nil];
+}
+
+- (void)openPreferences:(id)sender
+{
+  if (gHWND)
+    SendMessage(gHWND, WM_COMMAND, ID_PREFERENCES, 0);
+}
+
+- (void)toggleBypass:(id)sender
+{
+  auto* host = iplug::IPlugAPPHost::sInstance.get();
+  if (host)
+    host->SetBypass(!host->GetBypass());
+  
+  [self updateBypassState];
+}
+
+- (void)quit:(id)sender
+{
+  if (gHWND)
+    SendMessage(gHWND, WM_COMMAND, ID_QUIT, 0);
+  else
+    [NSApp terminate:nil];
+}
+
+@end
 
 int main(int argc, char *argv[])
 {
@@ -380,6 +472,10 @@ INT_PTR SWELLAppMain(int msg, INT_PTR parm1, INT_PTR parm2)
   {
     case SWELLAPP_ONLOAD:
     {
+      [NSApp setActivationPolicy:NSApplicationActivationPolicyAccessory];
+      if (!gMenuBarController)
+        gMenuBarController = [[VHSMK2MenuBarController alloc] init];
+      
       pAppHost = IPlugAPPHost::Create();
 
       // Set CLI options
@@ -442,7 +538,9 @@ INT_PTR SWELLAppMain(int msg, INT_PTR parm1, INT_PTR parm2)
         DeleteMenu(menu, 1, MF_BYPOSITION); // delete file menu
       }
       // Always set up screenshot shortcut
+#ifdef ID_SCREENSHOT
       SetMenuItemModifier(menu, ID_SCREENSHOT, MF_BYCOMMAND, 'S', FCONTROL | FSHIFT);
+#endif
 
 #if !defined _DEBUG || defined NO_IGRAPHICS
       if (menu)
@@ -471,6 +569,13 @@ INT_PTR SWELLAppMain(int msg, INT_PTR parm1, INT_PTR parm2)
 #endif
 
       HWND hwnd = CreateDialog(gHINST, MAKEINTRESOURCE(IDD_DIALOG_MAIN), NULL, IPlugAPPHost::MainDlgProc);
+      if (gHWND)
+      {
+        NSView* view = (__bridge NSView*)gHWND;
+        NSWindow* window = [view window];
+        if (window)
+          [window orderOut:nil];
+      }
       
       if (menu)
       {

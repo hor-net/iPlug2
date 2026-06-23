@@ -25,6 +25,8 @@
 
 BEGIN_IPLUG_NAMESPACE
 
+namespace igraphics { class IGraphics; }
+
 struct InstanceInfo
 {
   void* pAppHost;
@@ -58,7 +60,7 @@ public:
   //IPlugAPP
   void AppProcess(double** inputs, double** outputs, int nFrames);
   
-#if APP_HAS_TRANSPORT_BAR
+#if APP_HAS_TRANSPORT_BAR && !defined(NO_IGRAPHICS)
   /**
    * Overrides the LayoutUI from IGraphicsEditorDelegate to be able to modify
    * GUI and add the transport bar on tob of it

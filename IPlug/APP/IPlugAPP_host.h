@@ -34,6 +34,7 @@
 #include <limits>
 #include <memory>
 #include <optional>
+#include <atomic>
 
 #include "wdltypes.h"
 #include "wdlstring.h"
@@ -232,6 +233,9 @@ public:
   static WDL_DLGRET MainDlgProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lParam);
 
   IPlugAPP* GetPlug() { return mIPlug.get(); }
+  
+  void SetBypass(bool bypass) { mBypass.store(bypass, std::memory_order_relaxed); }
+  bool GetBypass() const { return mBypass.load(std::memory_order_relaxed); }
 private:
   std::unique_ptr<IPlugAPP> mIPlug = nullptr;
   std::unique_ptr<RtAudio> mDAC = nullptr;
@@ -255,6 +259,7 @@ private:
   bool mAudioEnding = false;
   bool mAudioDone = false;
   bool mNoIO = false;
+  std::atomic<bool> mBypass{false};
 
   /** The ID of the operating system's default input device if detected */
   std::optional<uint32_t> mDefaultInputDev;

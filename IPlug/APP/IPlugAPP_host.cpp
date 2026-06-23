@@ -710,6 +710,7 @@ int IPlugAPPHost::AudioCallback(void* pOutputBuffer, void* pInputBuffer, uint32_
 
   bool startWait = _this->mVecWait >= APP_N_VECTOR_WAIT; // wait APP_N_VECTOR_WAIT * iovs before processing audio, to avoid clicks
   bool doFade = _this->mVecWait == APP_N_VECTOR_WAIT || _this->mAudioEnding;
+  const bool bypass = _this->GetBypass();
   
   if (startWait && !_this->mAudioDone)
   {
@@ -722,24 +723,38 @@ int IPlugAPPHost::AudioCallback(void* pOutputBuffer, void* pInputBuffer, uint32_
 
       if (_this->mBufIndex == 0)
       {
-        for (int c = 0; c < nins; c++)
+        if (!bypass)
         {
-          _this->mInputBufPtrs.Set(c, (pInputBufferD + (c * nFrames)) + i);
+          for (int c = 0; c < nins; c++)
+          {
+            _this->mInputBufPtrs.Set(c, (pInputBufferD + (c * nFrames)) + i);
+          }
+          
+          for (int c = 0; c < nouts; c++)
+          {
+            _this->mOutputBufPtrs.Set(c, (pOutputBufferD + (c * nFrames)) + i);
+          }
+          
+          _this->mIPlug->AppProcess(_this->mInputBufPtrs.GetList(), _this->mOutputBufPtrs.GetList(), APP_SIGNAL_VECTOR_SIZE);
+          
+          _this->mSamplesElapsed += APP_SIGNAL_VECTOR_SIZE;
         }
-        
-        for (int c = 0; c < nouts; c++)
-        {
-          _this->mOutputBufPtrs.Set(c, (pOutputBufferD + (c * nFrames)) + i);
-        }
-        
-        _this->mIPlug->AppProcess(_this->mInputBufPtrs.GetList(), _this->mOutputBufPtrs.GetList(), APP_SIGNAL_VECTOR_SIZE);
-
-        _this->mSamplesElapsed += APP_SIGNAL_VECTOR_SIZE;
       }
       
       for (int c = 0; c < nouts; c++)
       {
-        pOutputBufferD[c * nFrames + i] *= APP_MULT;
+        if (bypass)
+        {
+          const int inChan = std::min(c, std::max(0, nins - 1));
+          if (nins > 0)
+            pOutputBufferD[c * nFrames + i] = pInputBufferD[inChan * nFrames + i] * APP_MULT;
+          else
+            pOutputBufferD[c * nFrames + i] = 0.0;
+        }
+        else
+        {
+          pOutputBufferD[c * nFrames + i] *= APP_MULT;
+        }
       }
 
       _this->mBufIndex++;
@@ -798,4 +813,3 @@ void IPlugAPPHost::ErrorCallback(RtAudioErrorType type, const std::string &error
 {
   std::cerr << "\nerrorCallback: " << errorText << "\n\n";
 }
-
