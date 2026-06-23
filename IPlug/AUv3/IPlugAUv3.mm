@@ -181,7 +181,11 @@ void IPlugAUv3::ProcessWithEvents(AudioTimeStamp const* pTimestamp, uint32_t fra
   }
 
   ENTER_PARAMS_MUTEX;
-  ProcessBuffers(0.f, framesRemaining); // what about bufferOffset
+  if(GetBypassed()) {
+    PassThroughBuffers(0.f, framesRemaining);
+  } else {
+    ProcessBuffers(0.f, framesRemaining); // what about bufferOffset
+  }
   LEAVE_PARAMS_MUTEX;
     
   //Output SYSEX from the editor, which has bypassed ProcessSysEx()
