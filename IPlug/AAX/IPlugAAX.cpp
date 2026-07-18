@@ -296,14 +296,20 @@ void IPlugAAX::RenderAudio(AAX_SIPlugRenderInfo* pRenderInfo, const TParamValPai
   {
     SetChannelConnections(ERoute::kInput, 0, numInChannels, true);
     SetChannelConnections(ERoute::kInput, numInChannels, MaxNChannels(ERoute::kInput) - numInChannels, false);
-    
+
     int sideChainChannel = HasSidechainInput() ? *pRenderInfo->mSideChainP : 0;
 
     if (sideChainChannel)
     {
-      SetChannelConnections(ERoute::kInput, mMaxNChansForMainInputBus, 1, true);
+      // The sidechain bus may have more than one channel (e.g. stereo sidechain
+      // on a plugin that declares a stereo SC bus). Previously only 1 channel
+      // was wired up, which left any extra SC channels in inputs[] pointing at
+      // stale scratch buffers on Pro Tools Windows, breaking ducking for
+      // plugins like HoRNet SpectraDuck.
+      const int nSidechainChans = MaxNChannels(ERoute::kInput) - mMaxNChansForMainInputBus;
+      SetChannelConnections(ERoute::kInput, mMaxNChansForMainInputBus, nSidechainChans, true);
       AttachBuffers(ERoute::kInput, 0, numInChannels, pRenderInfo->mAudioInputs, numSamples);
-      AttachBuffers(ERoute::kInput, mMaxNChansForMainInputBus, 1, pRenderInfo->mAudioInputs + sideChainChannel, numSamples);
+      AttachBuffers(ERoute::kInput, mMaxNChansForMainInputBus, nSidechainChans, pRenderInfo->mAudioInputs + sideChainChannel, numSamples);
     }
     else
       AttachBuffers(ERoute::kInput, 0, numInChannels, pRenderInfo->mAudioInputs, numSamples);
