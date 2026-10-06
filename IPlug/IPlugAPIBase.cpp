@@ -143,6 +143,17 @@ void IPlugAPIBase::OnTimer(Timer& t)
 {
 // VST3 ********************************************************************************
 #if defined VST3P_API || defined VST3_API
+  // This queue is filled by SendParameterValueFromAPI (processor -> UI updates,
+  // e.g. linked/derived parameter changes) and must be drained for VST3 too:
+  // it previously existed only in the non-VST3 branch, so those updates never
+  // reached the editor.
+  while (mParamChangeFromProcessor.ElementsAvailable())
+  {
+    ParamTuple p;
+    mParamChangeFromProcessor.Pop(p);
+    SendParameterValueFromDelegate(p.idx, p.value, false);
+  }
+
   while (mMidiMsgsFromProcessor.ElementsAvailable())
   {
     IMidiMsg msg;
