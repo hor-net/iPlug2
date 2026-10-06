@@ -478,6 +478,15 @@ public:
   /** @return \c true If the parameter should be automateable  */
   bool GetCanAutomate() const { return !(mFlags & kFlagCannotAutomate); }
 
+  /** Enable / disable host automation of this parameter.
+   * Used by the auto-output coupling in HoRNetSpikesMK2: when AutoOutput
+   * is ON, the Output Gain knob is driven by the Spike knob and must NOT
+   * be writable by the host (would otherwise create automation loops). */
+  void SetCanAutomate(bool canAutomate) {
+    if (canAutomate) mFlags &= ~kFlagCannotAutomate;
+    else             mFlags |=  kFlagCannotAutomate;
+  }
+
   /** @return \c true If the parameter should be discrete (stepped)  */
   bool GetStepped() const { return mFlags & kFlagStepped; }
 
