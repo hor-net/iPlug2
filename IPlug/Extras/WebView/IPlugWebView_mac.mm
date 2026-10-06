@@ -217,8 +217,35 @@ void* IWebViewImpl::OpenWebView(void* pParent, float x, float y, float w, float 
 
 void IWebViewImpl::CloseWebView()
 {
+  // IMPORTANT: this can run while the WKWebView is being torn down
+  // out-of-order (e.g. ~IWebView destroys the IWebViewImpl when the
+  // editor is already half-detached) or be called twice (once from the
+  // editor's CloseWindow, once from ~IWebView via IWebView's destructor).
+  // Guard every Objective-C message against nil and against a double call
+  // so we don't crash REAPER's main thread with a use-after-free in
+  // WebKit::AuxiliaryProcessProxy::sendMessage -> ProcessThrottler.
+  if (mWKWebView == nil) {
+    // Already closed (or never opened). Just keep the ivars consistent so
+    // the EvaluateJavaScript() guard `if (mWKWebView && ...)` is still a
+    // reliable short-circuit on the next call.
+    mWebConfig = nil;
+    mScriptMessageHandler = nil;
+    mNavigationDelegate = nil;
+    return;
+  }
+
+  // Break the WKUserContentController -> script handler retain cycle.
+  // Without this, the controller keeps the handler alive across editor
+  // close/reopen cycles, so a stale WKScriptMessageHandler can post a
+  // message back into an IWebView that has been destroyed. We only call
+  // this if the configuration still owns a controller (LoadHTML/LoadFile
+  // paths set mWebConfig; programmatic-only paths may not).
+  if (mWebConfig && mWebConfig.userContentController) {
+    [mWebConfig.userContentController removeScriptMessageHandlerForName:@"callback"];
+  }
+
   [mWKWebView removeFromSuperview];
-  
+
   mWebConfig = nil;
   mWKWebView = nil;
   mScriptMessageHandler = nil;
