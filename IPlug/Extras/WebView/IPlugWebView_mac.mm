@@ -148,11 +148,22 @@ void* IWebViewImpl::OpenWebView(void* pParent, float x, float y, float w, float 
                              forMainFrameOnly:YES]];
   
   // this script waits for DOMContentLoaded and then notifies C++ that JavaScript is ready
+  // The notification is RETRIED until the C++ side has processed it: a single
+  // JSREADY could be lost (script-handler lifetime races during editor
+  // close/reopen, IPlugSendMsg not yet defined, dropped message) and the
+  // editor would stay white and unresponsive forever. OnWebContentLoaded is
+  // idempotent so the extra notifications are harmless.
   [controller addUserScript:[[WKUserScript alloc] initWithSource:
-                             @"window.addEventListener('load', function() { setTimeout(function() { \
-                                console.log(\"sending JSREADY\"); \
-                                IPlugSendMsg({'msg': 'JSREADY'}) \
-                              }, 100)});"
+                             @"(function() { \
+                                var tries = 0; \
+                                function ping() { \
+                                  if (window.IPlugJsAck) return; \
+                                  try { IPlugSendMsg({'msg': 'JSREADY'}); } catch (e) {} \
+                                  if (++tries < 20) setTimeout(ping, 500); \
+                                } \
+                                window.addEventListener('load', function() { setTimeout(ping, 100); }); \
+                                document.addEventListener('DOMContentLoaded', function() { setTimeout(ping, 100); }); \
+                              })();"
                              injectionTime:WKUserScriptInjectionTimeAtDocumentStart
                              forMainFrameOnly:YES]];
   

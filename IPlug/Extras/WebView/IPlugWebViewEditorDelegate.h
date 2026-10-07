@@ -83,6 +83,15 @@ public:
   void CloseWindow() override
   {
     CloseWebView();
+    // Per-open handshake state: the editor init must run exactly once per
+    // open and the ready sequence must restart on the next one.
+    mWebViewReady = false;
+    mEditorInitDone = false;
+    mUIOpenDone = false;
+    mEditorViewAttached = false;
+    mEditorWebViewCreated = false;
+    mEditorOpenRequested = false;
+    mEditorOpenTicks = 0;
   }
 
   bool OnMessage(int msgTag, int ctrlTag, int dataSize, const void* pData) override
@@ -287,18 +296,34 @@ public:
   
   void OnParentWindowResize(int width, int height) override;
 
+  // Start the page load only when BOTH the webview exists and the editor view
+  // is attached to its parent window, exactly once per open. Loading earlier
+  // (webview created but not yet hosted) is unreliable in some hosts and the
+  // editor then stays a blank white surface; the historical double call from
+  // OpenWindow masked this by loading again after the attach.
+  void TryStartEditorInit()
+  {
+    if (mEditorInitDone || !mEditorInitFunc || !mEditorViewAttached || !mEditorWebViewCreated)
+      return;
+    mEditorInitDone = true;
+    mEditorInitFunc();
+  }
+
   void OnWebViewReady() override
   {
-    if (mEditorInitFunc)
-    {
-      mEditorInitFunc();
-    }
+    mEditorWebViewCreated = true;
+    TryStartEditorInit();
   }
   
   void OnWebContentLoaded() override
   {
+    // The JSREADY notification is retried by the injected script and may also
+    // arrive again after a re-load: the params message is idempotent on the JS
+    // side (SetupControls early-returns once built) and is RESENT every time so
+    // a document that started after a lost notification is never left without
+    // its parameters (white, unresponsive editor).
     printf("OnWebContentLoaded called!\n");
-    
+
     mWebViewReady = true;
     printf("WebView is now ready!\n");
     
@@ -323,9 +348,15 @@ public:
    #ifdef OS_MAC
     // First flush all queued JavaScript messages and set mWebViewReady = true
     FlushJavaScriptQueue();
+    // Acknowledge the JSREADY retries so the injected ping loop can stop.
+    QueueJavaScript("try { window.IPlugJsAck = 1; } catch (e) {}");
    #endif
 
-    OnUIOpen();
+    if (!mUIOpenDone)
+    {
+      mUIOpenDone = true;
+      OnUIOpen();
+    }
   }
   
   void SetMaxJSStringLength(int length)
@@ -374,6 +405,12 @@ protected:
   // JavaScript message queue system for macOS timing fix
   std::queue<std::string> mJavaScriptQueue;
   bool mWebViewReady = false;
+  bool mEditorInitDone = false;
+  bool mUIOpenDone = false;
+  bool mEditorViewAttached = false;
+  bool mEditorWebViewCreated = false;
+  bool mEditorOpenRequested = false;
+  int mEditorOpenTicks = 0;
   std::mutex mQueueMutex;
   
 private:

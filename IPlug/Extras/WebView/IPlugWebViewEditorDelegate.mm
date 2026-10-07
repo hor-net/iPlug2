@@ -182,11 +182,13 @@ void* WebViewEditorDelegate::OpenWindow(void* pParent)
   [pHelperView setFrame:CGRectMake(0, 0, GetEditorWidth(), GetEditorHeight())];
   SetWebViewBounds(0, 0, GetEditorWidth(), GetEditorHeight());
   
-  if (mEditorInitFunc)
-  {
-    mEditorInitFunc();
-  }
-  
+  // The view is now created AND attached to its parent window: start the page
+  // load if the webview is ready (order-independent, exactly once).
+  mEditorViewAttached = true;
+  TryStartEditorInit();
+  mEditorOpenRequested = true;
+  mEditorOpenTicks = 0;
+
   return mView;
 }
 
