@@ -6,6 +6,7 @@ This is the iPlug2 framework repository. Upstream: https://github.com/iPlug2/iPl
 
 - Be concise. Assume the user knows audio programming concepts but not iPlug2 specifically.
 - Check current directory before running scripts; return to repo root after.
+- On **every plugin update**, assess regressions from this checkout's shared WebView/API changes. Read and follow [Documentation/webview-regressions.md](Documentation/webview-regressions.md). For WebView plugins, fresh-host autoload/project restore with the editor saved open is mandatory; warm reopen/validator success is not a substitute. Record untested platforms and unresolved failures explicitly.
 
 ## iPlug2 Overview
 
