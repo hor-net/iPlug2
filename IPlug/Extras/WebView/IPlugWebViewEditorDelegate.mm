@@ -186,8 +186,6 @@ void* WebViewEditorDelegate::OpenWindow(void* pParent)
   // load if the webview is ready (order-independent, exactly once).
   mEditorViewAttached = true;
   TryStartEditorInit();
-  mEditorOpenRequested = true;
-  mEditorOpenTicks = 0;
 
   return mView;
 }

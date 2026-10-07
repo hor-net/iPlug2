@@ -155,14 +155,16 @@ void* IWebViewImpl::OpenWebView(void* pParent, float x, float y, float w, float 
   // idempotent so the extra notifications are harmless.
   [controller addUserScript:[[WKUserScript alloc] initWithSource:
                              @"(function() { \
-                                var tries = 0; \
+                                var tries = 0, started = false; \
+                                window.IPlugDocumentId = Date.now().toString(36) + Math.random().toString(36).slice(2); \
                                 function ping() { \
                                   if (window.IPlugJsAck) return; \
-                                  try { IPlugSendMsg({'msg': 'JSREADY'}); } catch (e) {} \
+                                  try { IPlugSendMsg({'msg': 'JSREADY', 'documentId': window.IPlugDocumentId}); } catch (e) {} \
                                   if (++tries < 20) setTimeout(ping, 500); \
                                 } \
-                                window.addEventListener('load', function() { setTimeout(ping, 100); }); \
-                                document.addEventListener('DOMContentLoaded', function() { setTimeout(ping, 100); }); \
+                                function start() { if (started) return; started = true; ping(); } \
+                                window.addEventListener('load', start); \
+                                document.addEventListener('DOMContentLoaded', start); \
                               })();"
                              injectionTime:WKUserScriptInjectionTimeAtDocumentStart
                              forMainFrameOnly:YES]];
@@ -346,7 +348,10 @@ void IWebViewImpl::ReloadPageContent()
 
 void IWebViewImpl::EvaluateJavaScript(const char* scriptStr, IWebView::completionHandlerFunc func)
 {
-  if (mWKWebView && ![mWKWebView isLoading])
+  // DOM readiness is managed by the editor's JSREADY handshake. WebKit can
+  // still report loading after DOMContentLoaded: dropping evaluations here
+  // loses the entire initial parameter snapshot without reporting an error.
+  if (mWKWebView)
   {
     [mWKWebView evaluateJavaScript:[NSString stringWithUTF8String:scriptStr] completionHandler:^(NSString *result, NSError *error) {
       if (error != nil)

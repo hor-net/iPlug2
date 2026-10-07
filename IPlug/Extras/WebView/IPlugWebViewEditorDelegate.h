@@ -82,7 +82,17 @@ public:
 
   void CloseWindow() override
   {
+    if (mUIOpenDone)
+      OnUIClose();
     CloseWebView();
+#ifdef OS_MAC
+    {
+      std::lock_guard<std::mutex> lock(mQueueMutex);
+      std::queue<std::string> empty;
+      mJavaScriptQueue.swap(empty);
+    }
+#endif
+    mReadyDocumentId.clear();
     // Per-open handshake state: the editor init must run exactly once per
     // open and the ready sequence must restart on the next one.
     mWebViewReady = false;
@@ -90,8 +100,6 @@ public:
     mUIOpenDone = false;
     mEditorViewAttached = false;
     mEditorWebViewCreated = false;
-    mEditorOpenRequested = false;
-    mEditorOpenTicks = 0;
   }
 
   bool OnMessage(int msgTag, int ctrlTag, int dataSize, const void* pData) override
@@ -287,7 +295,15 @@ public:
     }
     else if(json["msg"] == "JSREADY")
     {
-      printf("Received JSREADY message from JavaScript - DOM is ready!\n");
+      // Retries belong to one document. A reload creates a new document and
+      // must get a new full snapshot, even while the native editor stays open.
+      const std::string documentId = json.value("documentId", std::string{});
+      if (!documentId.empty() && documentId != mReadyDocumentId)
+      {
+        mReadyDocumentId = documentId;
+        mWebViewReady = false;
+        mUIOpenDone = false;
+      }
       OnWebContentLoaded();
     }
   }
@@ -312,20 +328,28 @@ public:
   void OnWebViewReady() override
   {
     mEditorWebViewCreated = true;
+#ifdef OS_WIN
+    // WebView2 creates its controller directly in the supplied parent HWND;
+    // it has no macOS helper-view attachment step.
+    mEditorViewAttached = true;
+#endif
     TryStartEditorInit();
   }
   
   void OnWebContentLoaded() override
   {
-    // The JSREADY notification is retried by the injected script and may also
-    // arrive again after a re-load: the params message is idempotent on the JS
-    // side (SetupControls early-returns once built) and is RESENT every time so
-    // a document that started after a lost notification is never left without
-    // its parameters (white, unresponsive editor).
-    printf("OnWebContentLoaded called!\n");
+#ifdef OS_WIN
+    // WebView2 calls this once per successful NavigationCompleted, not from
+    // the macOS JSREADY retry loop. Every navigation needs a full snapshot.
+    mUIOpenDone = false;
+#else
+    // Duplicate notifications must not reapply metadata defaults over the
+    // host's values. New documents reset these flags in the JSREADY handler.
+    if (mWebViewReady && mUIOpenDone)
+      return;
+#endif
 
     mWebViewReady = true;
-    printf("WebView is now ready!\n");
     
     // Now prepare and send the params message (this will execute immediately since mWebViewReady is now true)
     nlohmann::json msg;
@@ -342,7 +366,6 @@ public:
     msg["params"] = params;
 
     // Send params using the correct mechanism (SendJSONFromDelegate -> SendArbitraryMsgFromDelegate with -1)
-    printf("Sending params via SendJSONFromDelegate\n");
     SendJSONFromDelegate(msg);
 
    #ifdef OS_MAC
@@ -409,8 +432,7 @@ protected:
   bool mUIOpenDone = false;
   bool mEditorViewAttached = false;
   bool mEditorWebViewCreated = false;
-  bool mEditorOpenRequested = false;
-  int mEditorOpenTicks = 0;
+  std::string mReadyDocumentId;
   std::mutex mQueueMutex;
   
 private:
