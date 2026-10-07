@@ -109,6 +109,10 @@ public:
   /** Called when the web view is ready to receive navigation instructions */
   virtual void OnWebViewReady() {}
   
+  /** Called by the macOS/iOS navigation delegate when a new navigation starts;
+   * script consumers can suspend messages until the document reports readiness. */
+  virtual void OnWebContentLoading() {}
+
   /** Called after navigation instructions have been exectued and e.g. a page has loaded */
   virtual void OnWebContentLoaded() {}
   

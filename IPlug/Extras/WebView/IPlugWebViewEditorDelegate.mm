@@ -170,6 +170,8 @@ WebViewEditorDelegate::~WebViewEditorDelegate()
 void* WebViewEditorDelegate::OpenWindow(void* pParent)
 {
   PLATFORM_VIEW* pParentView = (PLATFORM_VIEW*) pParent;
+  TraceWebView(static_cast<IWebView*>(this), "editor-open", "parent=%p window=%p",
+    pParent, (void*)pParentView.window);
     
   IPLUG_WKWEBVIEW_EDITOR_HELPER* pHelperView = [[IPLUG_WKWEBVIEW_EDITOR_HELPER alloc] initWithEditorDelegate: this];
   mView = (void*) pHelperView;
@@ -185,6 +187,7 @@ void* WebViewEditorDelegate::OpenWindow(void* pParent)
   // The view is now created AND attached to its parent window: start the page
   // load if the webview is ready (order-independent, exactly once).
   mEditorViewAttached = true;
+  TraceWebView(static_cast<IWebView*>(this), "editor-attach", "window=%p", (void*)pHelperView.window);
   TryStartEditorInit();
 
   return mView;

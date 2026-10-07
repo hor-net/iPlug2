@@ -39,6 +39,7 @@
 #import "IPlugWKWebViewUIDelegate.h"
 
 #include "IPlugWebView.h"
+#include "IPlugWebViewDiagnostics.h"
 #include "IPlugPaths.h"
 
 namespace iplug {
@@ -101,6 +102,7 @@ IWebViewImpl::~IWebViewImpl()
 
 void* IWebViewImpl::OpenWebView(void* pParent, float x, float y, float w, float h, float scale)
 {
+  TraceWebView(mIWebView, "create", "parent=%p size=%.0fx%.0f", pParent, w, h);
   WKWebViewConfiguration* webConfig = [[WKWebViewConfiguration alloc] init];
   WKPreferences* preferences = [[WKPreferences alloc] init];
   
@@ -137,6 +139,14 @@ void* IWebViewImpl::OpenWebView(void* pParent, float x, float y, float w, float 
                              @"function IPlugSendMsg(m) { webkit.messageHandlers.callback.postMessage(m); }"
                              injectionTime:WKUserScriptInjectionTimeAtDocumentStart
                              forMainFrameOnly:YES]];
+
+#ifdef _DEBUG
+  // Sparse diagnostic events, not message payloads: distinguish script errors
+  // from the independent 2D-grid and WebGL-spectrum context lifecycles.
+  [controller addUserScript:[[WKUserScript alloc] initWithSource:
+    @"(function(){function report(event,line,column){try{IPlugSendMsg({msg:'WEBVIEW_DIAGNOSTIC',event:event,line:line||0,column:column||0});}catch(e){}} window.addEventListener('error',function(e){report('page-error',e.lineno,e.colno);}); ['contextlost','contextrestored','webglcontextlost','webglcontextrestored'].forEach(function(type){window.addEventListener(type,function(e){var chart=document.chart;if(!chart)return;var grid=e.target===chart._gridCanvas;var spectrum=e.target===chart._spectrumCanvas;if(grid||spectrum)report((grid?'grid':'spectrum')+'-context-'+(type.indexOf('restored')>=0?'restored':'lost'));},true);});})();"
+    injectionTime:WKUserScriptInjectionTimeAtDocumentStart forMainFrameOnly:YES]];
+#endif
 
   // this script prevents view scaling on iOS
   [controller addUserScript:[[WKUserScript alloc] initWithSource:
@@ -247,6 +257,12 @@ void IWebViewImpl::CloseWebView()
     return;
   }
 
+  TraceWebView(mIWebView, "close", "view=%p", (__bridge void*)mWKWebView);
+  // Pending navigation from a closed editor must not alter the readiness of
+  // the next editor (or call back into its destroyed C++ owner).
+  mWKWebView.navigationDelegate = nil;
+  mWKWebView.UIDelegate = nil;
+  [mWKWebView stopLoading];
   // Break the WKUserContentController -> script handler retain cycle.
   // Without this, the controller keeps the handler alive across editor
   // close/reopen cycles, so a stale WKScriptMessageHandler can post a
@@ -272,6 +288,7 @@ void IWebViewImpl::HideWebView(bool hide)
 
 void IWebViewImpl::LoadHTML(const char* html)
 {
+  TraceWebView(mIWebView, "load-html", "view=%p bytes=%zu", (__bridge void*)mWKWebView, strlen(html));
   [mWKWebView loadHTMLString:[NSString stringWithUTF8String:html] baseURL:nil];
 }
 
@@ -337,6 +354,8 @@ void IWebViewImpl::LoadFile(const char* fileName, const char* _Nullable bundleID
   else
   {
     NSURL* rootUrl = [NSURL URLWithString:webroot relativeToURL:nil];
+    TraceWebView(mIWebView, "load-file", "view=%p page-valid=%d root-valid=%d root-path-length=%lu",
+      (__bridge void*)mWKWebView, pageUrl != nil, rootUrl != nil, (unsigned long)rootUrl.path.length);
     [mWKWebView loadFileURL:pageUrl allowingReadAccessToURL:rootUrl];
   }
 }
@@ -353,9 +372,13 @@ void IWebViewImpl::EvaluateJavaScript(const char* scriptStr, IWebView::completio
   // loses the entire initial parameter snapshot without reporting an error.
   if (mWKWebView)
   {
+    const void* pTraceOwner = mIWebView; // identity only; callback must not dereference a closed owner
     [mWKWebView evaluateJavaScript:[NSString stringWithUTF8String:scriptStr] completionHandler:^(NSString *result, NSError *error) {
       if (error != nil)
+      {
+        TraceWebView(pTraceOwner, "js-error", "domain=%s code=%ld", error.domain.UTF8String, (long)error.code);
         NSLog(@"Error %@",error);
+      }
       else if(func)
       {
         func([result UTF8String]);

@@ -30,6 +30,7 @@
 #import "IPlugWKWebViewDelegate.h"
 
 #include "IPlugWebView.h"
+#include "IPlugWebViewDiagnostics.h"
 
 #if !__has_feature(objc_arc)
 #error This file must be compiled with Arc. Use -fobjc-arc flag
@@ -103,11 +104,41 @@ NS_ASSUME_NONNULL_BEGIN
   }
 }
 
+- (void)webView:(WKWebView*)webView didStartProvisionalNavigation:(WKNavigation* _Null_unspecified)navigation
+{
+  if (webView.navigationDelegate != self) return; // closed/replaced view
+  TraceWebView(mIWebView, "navigation-start", "view=%p nav=%p window=%p size=%.0fx%.0f",
+    (__bridge void*)webView, (__bridge void*)navigation, (__bridge void*)webView.window,
+    webView.bounds.size.width, webView.bounds.size.height);
+  mIWebView->OnWebContentLoading();
+}
+
+- (void)webView:(WKWebView*)webView didCommitNavigation:(WKNavigation* _Null_unspecified)navigation
+{
+  TraceWebView(mIWebView, "navigation-commit", "view=%p nav=%p", (__bridge void*)webView, (__bridge void*)navigation);
+}
+
+- (void)webView:(WKWebView*)webView didFailProvisionalNavigation:(WKNavigation* _Null_unspecified)navigation withError:(NSError*)error
+{
+  TraceWebView(mIWebView, "navigation-fail-provisional", "view=%p nav=%p domain=%s code=%ld",
+    (__bridge void*)webView, (__bridge void*)navigation, error.domain.UTF8String, (long)error.code);
+}
+
+- (void)webView:(WKWebView*)webView didFailNavigation:(WKNavigation* _Null_unspecified)navigation withError:(NSError*)error
+{
+  TraceWebView(mIWebView, "navigation-fail", "view=%p nav=%p domain=%s code=%ld",
+    (__bridge void*)webView, (__bridge void*)navigation, error.domain.UTF8String, (long)error.code);
+}
+
+- (void)webViewWebContentProcessDidTerminate:(WKWebView*)webView
+{
+  TraceWebView(mIWebView, "content-process-terminated", "view=%p", (__bridge void*)webView);
+}
+
 - (void) webView:(IPLUG_WKWEBVIEW*) webView didFinishNavigation:(WKNavigation*) navigation
 {
-  // OnWebContentLoaded() is now called when we receive the JSREADY message from JavaScript
-  // This ensures that the DOM and all JavaScript are fully ready before processing messages
-  printf("didFinishNavigation called - waiting for JSREADY message from JavaScript\n");
+  // Initial values are sent only after the document's JSREADY message.
+  TraceWebView(mIWebView, "navigation-finish", "view=%p nav=%p", (__bridge void*)webView, (__bridge void*)navigation);
 }
 
 - (void)download:(WKDownload*)download decideDestinationUsingResponse:(NSURLResponse*)response suggestedFilename:(NSString*)filename completionHandler:(void (^_Nonnull)(NSURL* _Nullable))completionHandler API_AVAILABLE(macos(11.3), ios(14.5))

@@ -35,6 +35,7 @@
 
 #include "IPlugEditorDelegate.h"
 #include "IPlugWebView.h"
+#include "IPlugWebViewDiagnostics.h"
 #include "wdl_base64.h"
 #include "json.hpp"
 #include <functional>
@@ -82,6 +83,7 @@ public:
 
   void CloseWindow() override
   {
+    TraceWebView(static_cast<IWebView*>(this), "editor-close", "ready=%d opened=%d", mWebViewReady, mUIOpenDone);
     if (mUIOpenDone)
       OnUIClose();
     CloseWebView();
@@ -293,11 +295,23 @@ public:
       float dpr = json["dpr"].get<float>();
       OnWebContextMenu(paramIdx, x, y, dpr);
     }
+#ifdef _DEBUG
+    else if(json["msg"] == "WEBVIEW_DIAGNOSTIC")
+    {
+      const std::string event = json.value("event", std::string{});
+      if (event == "page-error" || event == "grid-context-lost" || event == "grid-context-restored"
+          || event == "spectrum-context-lost" || event == "spectrum-context-restored")
+        TraceWebView(static_cast<IWebView*>(this), event.c_str(), "line=%d column=%d",
+          json.value("line", 0), json.value("column", 0));
+    }
+#endif
     else if(json["msg"] == "JSREADY")
     {
       // Retries belong to one document. A reload creates a new document and
       // must get a new full snapshot, even while the native editor stays open.
       const std::string documentId = json.value("documentId", std::string{});
+      TraceWebView(static_cast<IWebView*>(this), "js-ready", "duplicate=%d ready=%d opened=%d",
+        documentId == mReadyDocumentId, mWebViewReady, mUIOpenDone);
       if (!documentId.empty() && documentId != mReadyDocumentId)
       {
         mReadyDocumentId = documentId;
@@ -322,6 +336,7 @@ public:
     if (mEditorInitDone || !mEditorInitFunc || !mEditorViewAttached || !mEditorWebViewCreated)
       return;
     mEditorInitDone = true;
+    TraceWebView(static_cast<IWebView*>(this), "editor-init");
     mEditorInitFunc();
   }
 
@@ -336,6 +351,16 @@ public:
     TryStartEditorInit();
   }
   
+  void OnWebContentLoading() override
+  {
+    // The old document's readiness cannot authorize calls into the new one.
+    // Keep the native UI-open flag until JSREADY (or close) so OnUIClose still
+    // runs if the host closes an editor while its navigation is in progress.
+    mWebViewReady = false;
+    mReadyDocumentId.clear();
+    TraceWebView(static_cast<IWebView*>(this), "document-loading");
+  }
+
   void OnWebContentLoaded() override
   {
 #ifdef OS_WIN
@@ -350,6 +375,7 @@ public:
 #endif
 
     mWebViewReady = true;
+    TraceWebView(static_cast<IWebView*>(this), "send-snapshot", "params=%d", NParams());
     
     // Now prepare and send the params message (this will execute immediately since mWebViewReady is now true)
     nlohmann::json msg;
