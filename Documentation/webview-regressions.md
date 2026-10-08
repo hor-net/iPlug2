@@ -58,13 +58,18 @@ harnesses under `Projects/HoRNetTotalEQMK2/tests/`. Adapt fixtures/assertions to
 other plugins; do not replay TotalEQ parameter identifiers as a generic test.
 Its README documents exact commands, diagnostic artifacts and limitations.
 
-**TotalEQ's cold REAPER autoload white UI remains unresolved.** LaunchServices
-restoration with an editor saved open is reproducibly white locally; captured
-GPU stacks are in WebKit audio-session/CoreAudio HAL initialization, followed by
-GPU watchdog termination and loss of WebContent before JSREADY. Manual reopening
-can succeed. Do not label this baseline fixed or waive another plugin's startup
-checks because warm editor tests pass. The separate natural grid disappearance
-has not been causally linked to that failure.
+**TotalEQ's cold REAPER autoload white UI has a strong local trigger, but the
+underlying cause is not established.** With Pro Tools Audio Bridge installed,
+LaunchServices restoration with the editor saved open reproduced the white UI;
+captured GPU stacks showed WebKit audio-session/CoreAudio HAL initialization,
+followed by GPU watchdog termination and loss of WebContent before JSREADY. After
+the user-authorized Avid uninstallation of the Bridge, the same isolated,
+audio-off cold project-restore test rendered the full editor in 2/2 cycles. This
+is strong evidence that the Bridge was a trigger in this Mac/configuration, not
+proof that the driver is defective or the sole cause. Keep the customer issue
+open pending confirmation on the customer's/release environment. Do not waive
+other plugins' startup checks. The separate natural grid disappearance has not
+been causally linked to that failure.
 
 A plugin-free diagnostic is now available as TotalEQ's
 `tests/reaper_webkit_context_probe.sh`: a separate minimal Cocoa/WKWebView app
