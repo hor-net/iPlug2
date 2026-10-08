@@ -39,6 +39,7 @@
 #include "wdl_base64.h"
 #include "json.hpp"
 #include <functional>
+#include <algorithm>
 #include <filesystem>
 #include <queue>
 #include <mutex>
@@ -57,6 +58,12 @@
  */
 
 BEGIN_IPLUG_NAMESPACE
+
+#ifdef OS_MAC
+// Native AppKit overlay kept above WKWebView so it can communicate loading
+// failures even when WebKit's content surface has not painted.
+void UpdateNativeWebViewLoadingOverlay(void* pView, int state, int timeoutMs, const char* details);
+#endif
 
 #ifndef DEFAULT_PATH
 static const char* DEFAULT_PATH = "~/Desktop";
@@ -86,6 +93,9 @@ public:
     TraceWebView(static_cast<IWebView*>(this), "editor-close", "ready=%d opened=%d", mWebViewReady, mUIOpenDone);
     if (mUIOpenDone)
       OnUIClose();
+#ifdef OS_MAC
+    UpdateNativeOverlay(0, "");
+#endif
     CloseWebView();
 #ifdef OS_MAC
     {
@@ -326,6 +336,36 @@ public:
   
   void OnParentWindowResize(int width, int height) override;
 
+  /** Enable a native macOS loading/failure overlay for this WebView editor. */
+  void EnableNativeLoadingOverlay(bool enable, int timeoutMs = 5000)
+  {
+#ifdef OS_MAC
+    mNativeLoadingOverlayEnabled = enable;
+    mNativeLoadingTimeoutMs = std::max(100, timeoutMs);
+#else
+    (void) enable;
+    (void) timeoutMs;
+#endif
+  }
+
+#ifdef OS_MAC
+  bool IsNativeLoadingOverlayEnabled() const { return mNativeLoadingOverlayEnabled; }
+  std::string GetNativeLoadingDiagnostics() const
+  {
+    const auto elapsedMs = mNativeLoadStartedAt.time_since_epoch().count() == 0 ? 0LL :
+      std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::steady_clock::now() - mNativeLoadStartedAt).count();
+    char info[1024];
+    std::snprintf(info, sizeof(info),
+      "Waited: %lld ms\nNavigation started: %s\nNavigation committed: %s\nNavigation finished: %s\nNavigation failure reported: %s\nContent process terminated: %s\nWebKit error: %s (%d)",
+      static_cast<long long>(elapsedMs), mNativeNavigationStarted ? "yes" : "no",
+      mNativeNavigationCommitted ? "yes" : "no", mNativeNavigationFinished ? "yes" : "no",
+      mNativeLoadFailed ? "yes" : "no", mNativeContentProcessTerminated ? "yes" : "no",
+      mNativeErrorDomain.empty() ? "none" : mNativeErrorDomain.c_str(), mNativeErrorCode);
+    return info;
+  }
+#endif
+
   // Start the page load only when BOTH the webview exists and the editor view
   // is attached to its parent window, exactly once per open. Loading earlier
   // (webview created but not yet hosted) is unreliable in some hosts and the
@@ -337,6 +377,20 @@ public:
       return;
     mEditorInitDone = true;
     TraceWebView(static_cast<IWebView*>(this), "editor-init");
+#ifdef OS_MAC
+    if (mNativeLoadingOverlayEnabled)
+    {
+      mNativeLoadStartedAt = std::chrono::steady_clock::now();
+      mNativeNavigationStarted = false;
+      mNativeNavigationCommitted = false;
+      mNativeNavigationFinished = false;
+      mNativeLoadFailed = false;
+      mNativeContentProcessTerminated = false;
+      mNativeErrorDomain.clear();
+      mNativeErrorCode = 0;
+      UpdateNativeOverlay(1, "Waiting for the WebView document to become ready.");
+    }
+#endif
     mEditorInitFunc();
   }
 
@@ -359,6 +413,75 @@ public:
     mWebViewReady = false;
     mReadyDocumentId.clear();
     TraceWebView(static_cast<IWebView*>(this), "document-loading");
+#ifdef OS_MAC
+    if (mNativeLoadingOverlayEnabled)
+    {
+      const bool newAttempt = (mNativeOverlayState == 0);
+      if (newAttempt)
+        mNativeLoadStartedAt = std::chrono::steady_clock::now();
+      mNativeNavigationStarted = true;
+      mNativeNavigationCommitted = false;
+      mNativeNavigationFinished = false;
+      mNativeLoadFailed = false;
+      mNativeContentProcessTerminated = false;
+      mNativeErrorDomain.clear();
+      mNativeErrorCode = 0;
+      UpdateNativeOverlay(newAttempt ? 1 : 3, "WebKit navigation started; waiting for JavaScript readiness.");
+    }
+#endif
+  }
+
+  void OnWebContentNavigationCommitted() override
+  {
+#ifdef OS_MAC
+    if (mNativeLoadingOverlayEnabled)
+    {
+      mNativeNavigationCommitted = true;
+      UpdateNativeOverlay(3, "WebKit committed the document; waiting for JavaScript readiness.");
+    }
+#endif
+  }
+
+  void OnWebContentNavigationFinished() override
+  {
+#ifdef OS_MAC
+    if (mNativeLoadingOverlayEnabled)
+    {
+      mNativeNavigationFinished = true;
+      UpdateNativeOverlay(3, "WebKit finished navigation; waiting for JavaScript readiness.");
+    }
+#endif
+  }
+
+  void OnWebContentLoadFailed(const char* errorDomain, int errorCode, bool provisional) override
+  {
+#ifdef OS_MAC
+    if (mNativeLoadingOverlayEnabled)
+    {
+      mNativeLoadFailed = true;
+      mNativeErrorDomain = errorDomain ? errorDomain : "unknown";
+      mNativeErrorCode = errorCode;
+      UpdateNativeOverlay(2, provisional ? "WebKit provisional navigation failed." : "WebKit navigation failed.");
+    }
+#else
+    (void) errorDomain;
+    (void) errorCode;
+    (void) provisional;
+#endif
+  }
+
+  void OnWebContentProcessTerminated() override
+  {
+#ifdef OS_MAC
+    if (mNativeLoadingOverlayEnabled)
+    {
+      const bool wasReady = (mNativeOverlayState == 0);
+      mNativeContentProcessTerminated = true;
+      UpdateNativeOverlay(2, wasReady ?
+        "The WebKit content process terminated after the UI became ready." :
+        "The WebKit content process terminated before the UI became ready.");
+    }
+#endif
   }
 
   void OnWebContentLoaded() override
@@ -375,6 +498,10 @@ public:
 #endif
 
     mWebViewReady = true;
+#ifdef OS_MAC
+    if (mNativeLoadingOverlayEnabled)
+      UpdateNativeOverlay(0, "");
+#endif
     TraceWebView(static_cast<IWebView*>(this), "send-snapshot", "params=%d", NParams());
     
     // Now prepare and send the params message (this will execute immediately since mWebViewReady is now true)
@@ -459,6 +586,28 @@ protected:
   bool mEditorViewAttached = false;
   bool mEditorWebViewCreated = false;
   std::string mReadyDocumentId;
+#ifdef OS_MAC
+  bool mNativeLoadingOverlayEnabled = false;
+  int mNativeLoadingTimeoutMs = 5000;
+  int mNativeOverlayState = 0;
+  std::chrono::steady_clock::time_point mNativeLoadStartedAt{};
+  bool mNativeNavigationStarted = false;
+  bool mNativeNavigationCommitted = false;
+  bool mNativeNavigationFinished = false;
+  bool mNativeLoadFailed = false;
+  bool mNativeContentProcessTerminated = false;
+  std::string mNativeErrorDomain;
+  int mNativeErrorCode = 0;
+
+  void UpdateNativeOverlay(int state, const char* details)
+  {
+    if (!mNativeLoadingOverlayEnabled)
+      return;
+    if (state != 3)
+      mNativeOverlayState = state;
+    UpdateNativeWebViewLoadingOverlay(mView, state, mNativeLoadingTimeoutMs, details);
+  }
+#endif
   std::mutex mQueueMutex;
   
 private:

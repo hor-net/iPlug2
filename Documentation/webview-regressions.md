@@ -14,6 +14,13 @@ shared API/timer changes and run that plugin's normal regressions.
 - `ca1567765`: suspend delivery during navigation, detach/stop closed views,
   and add Debug-only lifecycle diagnostics.
 - `b0f9a3c49`: guard out-of-order/double WebView teardown.
+- Current local candidate: an opt-in macOS AppKit loading/failure overlay for
+  TotalEQ. It sits above WKWebView, starts before navigation, times out after
+  5 seconds without JSREADY, and includes host/OS/navigation/error diagnostics.
+  New optional IWebView navigation callbacks default to no-op; other plugins do
+  not enable the overlay. This is a user-facing fallback, not a WebKit fix, and
+  JSREADY still does not prove visual paint. Test each WebView plugin after any
+  shared source update; Windows/WebView2 remains untested.
 - Related shared behavior: `IPlug/IPlugAPIBase.cpp::OnTimer` drains processor
   parameter notifications for VST3 (used by TotalEQ LINK I/O).
 - Where used, separately assess the plugin's jsiplug version: document identity
@@ -58,6 +65,18 @@ GPU watchdog termination and loss of WebContent before JSREADY. Manual reopening
 can succeed. Do not label this baseline fixed or waive another plugin's startup
 checks because warm editor tests pass. The separate natural grid disappearance
 has not been causally linked to that failure.
+
+A plugin-free diagnostic is now available as TotalEQ's
+`tests/reaper_webkit_context_probe.sh`: a separate minimal Cocoa/WKWebView app
+renders standalone and as a child of directly launched REAPER, but remains blank
+as a child of LaunchServices REAPER locally, with audio-off verified by ReaScript.
+The failed GPUs sample the same CoreAudio initialization path. This removes
+plugin code and in-process editor integration as necessary triggers for that
+local failure; it does not identify a driver/permission/OS root cause or certify
+other environments. DOM readiness may complete despite blank rendering, so retain
+visual assertions. See the TotalEQ README for the matrix and transient control
+failure. No CoreAudio/WebKit-suppression workaround is retained; the separate
+native overlay is only diagnostic UX and does not address the failure.
 
 Debug macOS lifecycle logs: `/tmp/iplug-webview-<host-PID>.log`. Keep diagnostics
 free of URLs, licensing data and parameter-message bodies. Never commit private

@@ -116,29 +116,34 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)webView:(WKWebView*)webView didCommitNavigation:(WKNavigation* _Null_unspecified)navigation
 {
   TraceWebView(mIWebView, "navigation-commit", "view=%p nav=%p", (__bridge void*)webView, (__bridge void*)navigation);
+  mIWebView->OnWebContentNavigationCommitted();
 }
 
 - (void)webView:(WKWebView*)webView didFailProvisionalNavigation:(WKNavigation* _Null_unspecified)navigation withError:(NSError*)error
 {
   TraceWebView(mIWebView, "navigation-fail-provisional", "view=%p nav=%p domain=%s code=%ld",
     (__bridge void*)webView, (__bridge void*)navigation, error.domain.UTF8String, (long)error.code);
+  mIWebView->OnWebContentLoadFailed(error.domain.UTF8String, (int)error.code, true);
 }
 
 - (void)webView:(WKWebView*)webView didFailNavigation:(WKNavigation* _Null_unspecified)navigation withError:(NSError*)error
 {
   TraceWebView(mIWebView, "navigation-fail", "view=%p nav=%p domain=%s code=%ld",
     (__bridge void*)webView, (__bridge void*)navigation, error.domain.UTF8String, (long)error.code);
+  mIWebView->OnWebContentLoadFailed(error.domain.UTF8String, (int)error.code, false);
 }
 
 - (void)webViewWebContentProcessDidTerminate:(WKWebView*)webView
 {
   TraceWebView(mIWebView, "content-process-terminated", "view=%p", (__bridge void*)webView);
+  mIWebView->OnWebContentProcessTerminated();
 }
 
 - (void) webView:(IPLUG_WKWEBVIEW*) webView didFinishNavigation:(WKNavigation*) navigation
 {
   // Initial values are sent only after the document's JSREADY message.
   TraceWebView(mIWebView, "navigation-finish", "view=%p nav=%p", (__bridge void*)webView, (__bridge void*)navigation);
+  mIWebView->OnWebContentNavigationFinished();
 }
 
 - (void)download:(WKDownload*)download decideDestinationUsingResponse:(NSURLResponse*)response suggestedFilename:(NSString*)filename completionHandler:(void (^_Nonnull)(NSURL* _Nullable))completionHandler API_AVAILABLE(macos(11.3), ios(14.5))

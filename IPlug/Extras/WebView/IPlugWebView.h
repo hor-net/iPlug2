@@ -115,6 +115,12 @@ public:
 
   /** Called after navigation instructions have been exectued and e.g. a page has loaded */
   virtual void OnWebContentLoaded() {}
+
+  /** Optional navigation lifecycle notifications. Error details intentionally omit URLs and localized strings. */
+  virtual void OnWebContentNavigationCommitted() {}
+  virtual void OnWebContentNavigationFinished() {}
+  virtual void OnWebContentLoadFailed(const char* errorDomain, int errorCode, bool provisional) {}
+  virtual void OnWebContentProcessTerminated() {}
   
   /** When a script in the web view posts a message, it will arrive as a UTF8 json string here */
   virtual void OnMessageFromWebView(const char* json) {}
